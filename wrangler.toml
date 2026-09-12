@@ -1,0 +1,24 @@
+name = "heymia"
+main = "src/worker.js"
+compatibility_date = "2026-05-03"
+
+# Bindings — configure in dashboard or via wrangler secrets
+# [vars]
+# GEMINI_API_KEY = ""        # wrangler secret put GEMINI_API_KEY
+# STRIPE_SECRET_KEY = ""     # wrangler secret put STRIPE_SECRET_KEY
+# LIVEAVATAR_API_KEY = ""   # wrangler secret put LIVEAVATAR_API_KEY
+
+# KV namespace for memory/file storage
+# [[kv_namespaces]]
+# binding = "MEMORY"
+# id = "your-kv-namespace-id"
+
+# R2 bucket for page uploads and vault
+# [[r2_buckets]]
+# binding = "VAULT"
+# bucket_name = "heymia-vault"
+
+# Custom domain
+# [env.production.routes]
+# pattern = "heymia.lensflow.au"
+# custom_domain = true
