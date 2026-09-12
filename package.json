@@ -1,13 +1,21 @@
 {
-  "name": "heymia",
-  "version": "3.0.0",
-  "private": true,
-  "type": "module",
+  "name": "heymia-worker-full",
+  "version": "1.0.0",
+  "description": "HeyMia is an AI agent command center built on Cloudflare Workers. It powers:",
+  "main": "index.js",
   "scripts": {
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "devDependencies": {
-    "wrangler": "^4.34.0"
-  }
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/findunclaimedmoney/heymia.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/findunclaimedmoney/heymia/issues"
+  },
+  "homepage": "https://github.com/findunclaimedmoney/heymia#readme"
 }
