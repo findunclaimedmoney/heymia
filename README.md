@@ -1,36 +1,43 @@
 # HeyMia Worker
 
-HeyMia is an AI agent command center built on Cloudflare Workers. It powers:
+AI agent command center on Cloudflare Workers. Powers Work mode, File Vault, website publish, LiveAvatar, and Stripe.
 
-- **Mia Agent** — AI assistant with Gemini integration for file management, routing, and workflow
-- **Fan Studio** — 5-minute private sessions with Jess (LiveAvatar + Stripe payments)
-- **Play Mode** — Casual chat and interactive games
-- **Work Mode** — Command center with File Vault, Workflow, Checklist, Daily Training, CapCut Editor, Find & Replace, and Deploy tools
-- **Admin Panel** — Upload and activate page versions via R2
+## Agent (v3)
 
-## Setup
+- **Primary:** Gemini 3.8 Flash (`gemini-3.8-flash`) — function calling
+- **Fallback:** Gemini 3.6 Flash → Gemini 2.5 Flash
+- **Edge fallback:** Cloudflare Workers AI (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`)
+- **Tools:** `worker_status`, `list_vault`, `publish_site`, `route_file`, `create_room`
 
-1. Install wrangler: `npm install -g wrangler`
-2. Configure secrets:
-   ```bash
-   wrangler secret put GEMINI_API_KEY
-   wrangler secret put STRIPE_SECRET_KEY
-   wrangler secret put LIVEAVATAR_API_KEY
-   ```
-3. Create KV namespace: `wrangler kv:namespace create MEMORY`
-4. Create R2 bucket: `wrangler r2 bucket create heymia-vault`
-5. Deploy: `wrangler deploy`
+Gemini 2.0 Flash is retired (shutdown 1 Jun 2026). Do not point the Worker at it.
 
-## Custom Domain
+## Routes
 
-Configured to run on `heymia.lensflow.au` — set up in dashboard under Workers → Triggers → Custom Domains.
+| Path | Purpose |
+|------|---------|
+| `/` `/work` | Workflow Command Center (R2 `ui/work-active.html` or embedded UI) |
+| `/chat` `POST` | Mia agent (tools + Gemini 3.8) |
+| `/files` | Vault upload/list (R2 `VAULT`, KV fallback) |
+| `/api/sites` | Publish static sites |
+| `/s/{slug}/` | Live published site |
+| `/route` | File classifier |
+| `/ui/activate` | Swap live HTML from vault |
+| `/session` `/start` `/stop` | LiveAvatar |
+| `/checkout` | Stripe |
 
-## Tech Stack
+## Deploy
 
-- **Cloudflare Workers** — Edge runtime
-- **Gemini 2.0 Flash** — AI chat backend
-- **KV** — File storage and memory
-- **R2** — Page version management
-- **LiveAvatar** — Real-time avatar sessions
-- **Stripe** — Payment processing
-- **Tailwind CSS** — Frontend styling (Play CDN)
+```bash
+npm i
+wrangler login
+wrangler kv namespace create MEMORY
+wrangler r2 bucket create heymia-vault
+# paste the IDs into wrangler.toml, then:
+wrangler secret put GEMINI_API_KEY
+wrangler secret put STRIPE_SECRET_KEY
+wrangler secret put LIVEAVATAR_API_KEY
+wrangler deploy
+```
+
+Custom domain: Workers → heymia → Domains → `heymia.lensflow.au`
+Connect this GitHub repo in Cloudflare **Workers → Settings → Builds** so every push deploys.
