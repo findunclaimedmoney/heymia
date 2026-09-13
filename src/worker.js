@@ -23,8 +23,44 @@ const jobs = new Map();
 const sessions = new Map();
 
 async function saveMem(e, a, c, k, v) {
-  if (!e.MEMORY) return;
-  await e.MEMORY.put("mem:" + a + ":" + c + ":" + k, JSON.stringify({ value: v, t: Date.now() }));
+  const rec = { value: v, t: Date.now(), agent: a, category: c, key: k };
+  const body = JSON.stringify(rec);
+  if (e.MEMORY) await e.MEMORY.put("mem:" + a + ":" + c + ":" + k, body);
+  if (vaultBound(e)) {
+    await e.VAULT.put("mem/" + a + "/" + c + "/" + k + ".json", body, {
+      httpMetadata: { contentType: "application/json" },
+    });
+  }
+}
+async function recallMem(e, a, c, k) {
+  c = c || "general";
+  a = a || "Mia";
+  if (k) {
+    if (e.MEMORY) {
+      const raw = await e.MEMORY.get("mem:" + a + ":" + c + ":" + k);
+      if (raw) return { ok: true, memories: [JSON.parse(raw)] };
+    }
+    if (vaultBound(e)) {
+      const obj = await e.VAULT.get("mem/" + a + "/" + c + "/" + k + ".json");
+      if (obj) return { ok: true, memories: [JSON.parse(await obj.text())] };
+    }
+    return { ok: false, memories: [], error: "not found" };
+  }
+  const out = [];
+  if (e.MEMORY) {
+    const listed = await e.MEMORY.list({ prefix: "mem:" + a + ":" + c + ":", limit: 40 });
+    for (const item of listed.keys || []) {
+      const raw = await e.MEMORY.get(item.name);
+      if (raw) out.push(JSON.parse(raw));
+    }
+  } else if (vaultBound(e)) {
+    const listed = await e.VAULT.list({ prefix: "mem/" + a + "/" + c + "/", limit: 40 });
+    for (const o of listed.objects || []) {
+      const obj = await e.VAULT.get(o.key);
+      if (obj) out.push(JSON.parse(await obj.text()));
+    }
+  }
+  return { ok: true, memories: out };
 }
 async function listKvFiles(e, c) {
   if (!e.MEMORY) return [];
@@ -274,7 +310,35 @@ export default {
               return { ok: true, sites: await listSites(env) };
             }
             if (name === "route_file") return routeFile(args.fileName, args.fileType, args.category);
-            if (name === "last_deploy") return (await readLastDeploy(env)) || { ok: false, error: "no deploys yet" };
+            if (name === "last_deploy" || name === "deploy_status") {
+              const last = (await readLastDeploy(env)) || { ok: false, error: "no deploys yet" };
+              if (name === "last_deploy") return last;
+              return { last, worker: await statusPayload(env) };
+            }
+            if (name === "create_file") {
+              return putVaultFile(env, args.name, args.content || "", args.type || "text/plain", args.category || "vault");
+            }
+            if (name === "read_file") {
+              if (!vaultBound(env)) return { error: "VAULT unbound" };
+              const found = await resolveVaultKey(env, args.key || args.name);
+              if (!found) return { error: "not found", key: args.key || args.name };
+              const text = await found.obj.text();
+              return { ok: true, key: found.key, bytes: text.length, content: text.slice(0, 8000) };
+            }
+            if (name === "save_memory") {
+              await saveMem(env, "Mia", args.category || "training", args.key, String(args.value || "").slice(0, 2000));
+              return { ok: true, key: args.key, category: args.category || "training" };
+            }
+            if (name === "recall_memory") {
+              return recallMem(env, "Mia", args.category || "training", args.key);
+            }
+            if (name === "create_site") {
+              if (!vaultBound(env)) return { error: "VAULT unbound" };
+              const html = args.html || designSiteHtml({ ...args, brief: args.brief || args.tagline || args.name });
+              const rec = await publishSite(env, { ...args, html });
+              rec.designed = !args.html;
+              return rec;
+            }
             if (name === "create_room") {
               if (!vaultBound(env)) return { error: "VAULT unbound" };
               const rec = { id: "room-" + crypto.randomUUID().slice(0, 8), name: args.name, theme: args.theme || "", prompt: args.prompt || "", created: new Date().toISOString() };
