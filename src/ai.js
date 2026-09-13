@@ -82,6 +82,8 @@ const TOOLS = [
         description: "Sort every vault file into a project folder (heymia-work, heymia-play, convex, sovereign-quant, agent-core, liveavatar, lensflow, glimr, inbox). Copies out of the flat vault/ dump. Does not move live ui/* files.",
         parameters: { type: "OBJECT", properties: {}, required: [] },
       },
+      {
+        name: "create_file",
         description: "Write a file into the R2 vault (HTML, JS, JSON, text, markdown).",
         parameters: {
           type: "OBJECT",
