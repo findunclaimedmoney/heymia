@@ -108,13 +108,13 @@ async function runDeploy(env, body) {
       return rec;
     }
     if (action === "publish_site" || action === "site") {
-      if (!vaultBound(env)) throw new Error("VAULT unbound - cannot publish");
+      if (!vaultBound(env)) throw new Error("VAULT unbound — cannot publish");
       const pub = await publishSite(env, body);
       rec.ok = true;
       rec.url = pub.url;
       rec.name = pub.slug;
     } else if (action === "activate_ui" || action === "ui") {
-      if (!vaultBound(env)) throw new Error("VAULT unbound - cannot activate UI");
+      if (!vaultBound(env)) throw new Error("VAULT unbound — cannot activate UI");
       const target = String(body.target || "work").toLowerCase();
       if (!["work", "play", "landing", "admin", "studio"].includes(target)) throw new Error("invalid target");
       const found = await resolveVaultKey(env, body.key);
@@ -146,18 +146,26 @@ async function statusPayload(env) {
   let vault = "missing";
   if (vaultBound(env)) {
     vault = "bound";
-    try { await env.VAULT.list({ prefix: "", limit: 1 }); }
-    catch (e) { vault = "error:" + (e.message || e); }
+    try {
+      await env.VAULT.list({ prefix: "", limit: 1 });
+    } catch (e) {
+      vault = "error:" + (e.message || e);
+    }
   }
   return {
-    ok: vault === "bound", status: "ok", service: "heymia", version: VERSION,
-    ai_model: env.GEMINI_MODEL || "gemini-3.8-flash", vault,
+    ok: vault === "bound",
+    status: "ok",
+    service: "heymia",
+    version: VERSION,
+    ai_model: env.GEMINI_MODEL || "gemini-3.8-flash",
+    vault,
     last_deploy: await readLastDeploy(env),
     ai: env.AI ? "bound" : "missing",
     gemini: env.GEMINI_API_KEY || env.GEMINI ? "set" : "unset",
     liveavatar: env.LIVEAVATAR_API_KEY || env.LIVEAVATAR ? "set" : "unset",
     stripe: env.STRIPE_SECRET_KEY || env.STRIPE ? "set" : "unset",
-    domain: env.PUBLIC_DOMAIN || null, avatar_id: AVATAR_ID,
+    domain: env.PUBLIC_DOMAIN || null,
+    avatar_id: AVATAR_ID,
     secrets_configured: {
       liveavatar: !!(env.LIVEAVATAR_API_KEY || env.LIVEAVATAR),
       stripe: !!(env.STRIPE_SECRET_KEY || env.STRIPE),
@@ -216,22 +224,30 @@ export default {
     const path = url.pathname;
     const method = request.method;
     if (method === "OPTIONS") return new Response(null, { status: 204, headers: corsH });
+
     try {
       if (path === "/health" || path === "/api/status" || (path === "/" && url.searchParams.get("format") === "json")) {
         return jsonR(await statusPayload(env));
       }
       if (path === "/config" && method === "GET") return jsonR({ avatar_url: AVATAR_URL, ws_url: WS_URL, avatar_id: AVATAR_ID, version: VERSION, model: env.GEMINI_MODEL || "gemini-3.8-flash" });
       if (path === "/env-check" && method === "GET") return jsonR(await statusPayload(env));
+
       const uiAdmin = await handleUiAdmin(request, env, path);
       if (uiAdmin) return jsonR(uiAdmin, uiAdmin.status || 200);
+
       if (path === "/route" && method === "POST") {
         const body = await request.json();
         return jsonR(routeFile(body.fileName, body.fileType, body.category));
       }
+
       if ((path === "/chat" || path === "/api/chat") && method === "POST") {
         const body = await request.json();
         const helpers = {
-          listFiles: async () => (await listR2Files(env)).concat(await listKvFiles(env)),
+          listFiles: async () => {
+            const r2 = await listR2Files(env);
+            const kv = await listKvFiles(env);
+            return r2.concat(kv);
+          },
           runTool: async (name, args) => {
             args = args || {};
             if (name === "worker_status") return statusPayload(env);
@@ -252,22 +268,23 @@ export default {
           },
         };
         const result = await handleAgentChat(env, body, helpers);
-        if (env.MEMORY && body.messages && body.messages.length) {
-          await saveMem(env, body.agent || "Mia", body.mode || "work", "last", String(body.messages[body.messages.length - 1].content || "").slice(0, 200));
+        if (env.MEMORY && body.messages?.length) {
+          await saveMem(env, body.agent || "Mia", body.mode || "work", "last", String(body.messages.at(-1).content || "").slice(0, 200));
         }
         return jsonR(result);
       }
+
       if (path === "/files" || path === "/api/vault") {
         if (method === "GET") {
           const key = url.searchParams.get("key");
           if (key && vaultBound(env)) {
             const found = await resolveVaultKey(env, key);
             if (!found) return jsonR({ error: "not found" }, 404);
-            return new Response(found.obj.body, { headers: { ...corsH, "Content-Type": found.obj.httpMetadata && found.obj.httpMetadata.contentType || mimeOf(found.key) } });
+            return new Response(found.obj.body, { headers: { ...corsH, "Content-Type": found.obj.httpMetadata?.contentType || mimeOf(found.key) } });
           }
           const cat = url.searchParams.get("category");
           const files = vaultBound(env) ? await listR2Files(env) : await listKvFiles(env, cat);
-          return jsonR({ ok: true, files: files, objects: files });
+          return jsonR({ ok: true, files, objects: files });
         }
         if (method === "POST") {
           const name = request.headers.get("X-File-Name") || request.headers.get("X-Filename");
@@ -278,7 +295,7 @@ export default {
             const saved = await putVaultFile(env, name, body, type, category);
             return jsonR(saved, saved.status || 200);
           }
-          const body = await request.json().catch(function(){ return {}; });
+          const body = await request.json().catch(() => ({}));
           const saved = await putVaultFile(env, body.name, body.content || "", body.type, body.category);
           return jsonR(saved, saved.status || 200);
         }
@@ -289,13 +306,17 @@ export default {
           return jsonR({ ok: true, deleted: key });
         }
       }
+
       if (path === "/api/deploy" || path === "/deploy-status") {
-        if (method === "GET") return jsonR({ ok: true, last: await readLastDeploy(env), worker: await statusPayload(env) });
+        if (method === "GET") {
+          return jsonR({ ok: true, last: await readLastDeploy(env), worker: await statusPayload(env) });
+        }
         if (method === "POST") {
           const rec = await runDeploy(env, await request.json());
           return jsonR(rec, rec.ok ? 200 : 400);
         }
       }
+
       if (path.startsWith("/api/sites")) {
         if (!vaultBound(env)) return jsonR({ error: "VAULT missing. Cannot publish sites." }, 503);
         if (path === "/api/sites" && method === "GET") return jsonR({ ok: true, sites: await listSites(env) });
@@ -311,16 +332,18 @@ export default {
           return jsonR({ ok: true, deleted: slug });
         }
       }
+
       if (path.startsWith("/s/") && method === "GET") {
         if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
         return servePublishedSite(env, path);
       }
+
       if (path === "/session" && method === "GET") {
         const sessionId = crypto.randomUUID();
         const token = crypto.randomUUID();
         const companion = url.searchParams.get("companion") || "jess";
-        sessions.set(sessionId, { id: sessionId, token: token, companion: companion, status: "created", created_at: new Date().toISOString() });
-        return jsonR({ session_id: sessionId, token: token, companion: companion, avatar_url: AVATAR_URL, ws_url: WS_URL });
+        sessions.set(sessionId, { id: sessionId, token, companion, status: "created", created_at: new Date().toISOString() });
+        return jsonR({ session_id: sessionId, token, companion, avatar_url: AVATAR_URL, ws_url: WS_URL });
       }
       if (path === "/start" && method === "POST") {
         const body = await request.json();
@@ -350,10 +373,17 @@ export default {
         const data = await res.json();
         return jsonR({ payment_status: data.payment_status, amount_total: data.amount_total, currency: data.currency });
       }
+
       const page = matchHtmlPage(path);
-      if (page && method === "GET") return serveUI(env, page.r2Key, workHtml, page.name);
-      if (method === "GET" && (path === "/" || path.endsWith(".html"))) return serveUI(env, "ui/work-active.html", workHtml, "work");
-      return jsonR({ error: "Not found", path: path }, 404);
+      if (page && method === "GET") {
+        return serveUI(env, page.r2Key, workHtml, page.name);
+      }
+
+      if (method === "GET" && (path === "/" || path.endsWith(".html"))) {
+        return serveUI(env, "ui/work-active.html", workHtml, "work");
+      }
+
+      return jsonR({ error: "Not found", path }, 404);
     } catch (err) {
       return jsonR({ error: String(err && err.message || err) }, 500);
     }

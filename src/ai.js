@@ -133,6 +133,7 @@ function callsFromCandidate(data) {
 
 export async function handleAgentChat(env, body, helpers) {
   const messages = body.messages || [];
+  const mode = body.mode || "work";
   const agent = body.agent || "Mia";
   const system = getSystemPrompt(agent);
   let filesNote = "";
@@ -174,7 +175,9 @@ export async function handleAgentChat(env, body, helpers) {
           const fnParts = [];
           for (const call of calls) {
             const result = await helpers.runTool(call.name, call.args || {});
-            fnParts.push({ functionResponse: { name: call.name, response: result } });
+            fnParts.push({
+              functionResponse: { name: call.name, response: result },
+            });
           }
           payload.contents = [
             ...payload.contents,
