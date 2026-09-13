@@ -3,7 +3,7 @@ import { handleAgentChat, routeFile, grokTroubleshoot } from "./ai.js";
 import { handleUiAdmin, matchHtmlPage, serveUI, unwrapHtml } from "./routing.js";
 import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound, designSiteHtml } from "./sites.js";
 
-const VERSION = "3.1.1";
+const VERSION = "3.2.0";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -157,7 +157,7 @@ async function statusPayload(env) {
     status: "ok",
     service: "heymia",
     version: VERSION,
-    ai_model: env.GEMINI_MODEL || "gemini-3.8-flash",
+    ai_model: (env.XAI_API_KEY || env.GROK_API_KEY) ? "grok-4.5" : (env.GEMINI_MODEL || "gemini-3.8-flash"),
     vault,
     last_deploy: await readLastDeploy(env),
     ai: env.AI ? "bound" : "missing",

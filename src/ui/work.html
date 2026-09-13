@@ -789,7 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
   try { maybeAutoDailyReport(); } catch (e) {}
   try { updateQuoteStatus(); renderTriggerPanel(); } catch (e) {}
   const geminiMsg = state.geminiKey ? 'Gemini AI active.' : 'Add Gemini / Cloudflare / Stripe keys in the gear (Variables & Secrets).';
-  addMia('System ready. Domain: ' + PUBLIC_DOMAIN + '. Vault, Deploy, API, Shell, GitHub, Knowledge and Trainer are live. ' + geminiMsg);
+  addMia('Mia online — Grok 4.5 assistant. Vault, Sites, Deploy and troubleshooting are in my hands. ' + geminiMsg);
 });
 
 // ========== MODE / TOOL SWITCH ==========
@@ -933,26 +933,32 @@ async function sendToMia(e) {
     return;
   }
 
-  // Worker chat then Gemini
+  // Grok-4.5 Mia first (preview /api/chat), then Worker /chat, then browser Gemini
   addMia('Thinking…');
+  const payloads = JSON.stringify({
+    message: text,
+    messages: [{ role: 'user', content: text }],
+    agent: 'Mia',
+    mode: 'work',
+    companion: 'mia',
+  });
+  const chatUrls = [location.origin + '/api/chat'];
+  if (WORKER_BASE) chatUrls.push(WORKER_BASE.replace(/\/$/, '') + '/chat');
   try {
-    if (WORKER_BASE) {
-      const wres = await fetch(WORKER_BASE.replace(/\/$/, '') + '/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          messages: [{ role: 'user', content: text }],
-          agent: 'Mia',
-          mode: 'work',
-          companion: 'mia',
-        }),
-      });
-      if (wres.ok) {
+    for (const url of chatUrls) {
+      try {
+        const wres = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payloads,
+        });
+        const ct = wres.headers.get('content-type') || '';
+        if (!wres.ok || !ct.includes('json')) continue;
         const wdata = await wres.json();
         const box = document.getElementById('mia-chat');
         if (box.lastChild && box.lastChild.textContent.includes('Thinking')) box.removeChild(box.lastChild);
-        const reply = wdata.reply || wdata.response || '…';
+        const reply = wdata.reply || wdata.response;
+        if (!reply) continue;
         addMia(reply);
         speakMiaText(reply);
         if (wdata.site && wdata.site.url) {
@@ -960,7 +966,7 @@ async function sendToMia(e) {
           addMia('Live URL: ' + wdata.site.url);
         }
         return;
-      }
+      } catch (e) {}
     }
   } catch (e) { /* fall through to Gemini */ }
 

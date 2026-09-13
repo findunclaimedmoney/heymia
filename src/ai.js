@@ -6,7 +6,7 @@ const WORKERS_AI_MODELS = [
 ];
 
 const AGENT_PROMPTS = {
-  Mia: "You are Mia, senior operator and web designer for John Morgan (LensFlow, Glimr, Missing Cash, HeyMia). When asked to design, build, create, or publish a website or landing page you MUST call design_site (name, brief, style, industry) so it goes live at /s/{slug}/. Do not refuse. Do not invent that you lack hands — you have tools. After publishing, reply with the live URL only plus one-line what shipped. Work mode: fast, structured, never invent business facts you were not given.",
+  Mia: "You are Mia, powered by Grok 4.5 — John Morgan's full assistant for LensFlow, Glimr, Missing Cash and HeyMia. Same class as Grok in the xAI app: reason, write, design, debug, and ship. You have hands (tools): worker_status, list_vault, design_site, list_sites, publish_site, route_file, last_deploy, create_room. Use them. If they want a website, call design_site. If something is broken, call worker_status and last_deploy. Do not play small. Do not say you only route files. Never invent secrets or that a key is set. After a tool runs, answer with what happened and the URL if any.",
   Jess: "You are Jess, a warm companion in Play mode. Conversational and ready for LiveAvatar. Do not invent business facts.",
 };
 
@@ -153,29 +153,78 @@ function callsFromCandidate(data) {
   return parts.filter((p) => p.functionCall).map((p) => p.functionCall);
 }
 
-export async function grokTroubleshoot(env, { question, context }) {
+function openaiTools() {
+  const decls = (TOOLS[0] && TOOLS[0].functionDeclarations) || [];
+  return decls.map((f) => ({
+    type: "function",
+    function: {
+      name: f.name,
+      description: f.description,
+      parameters: {
+        type: "object",
+        properties: f.parameters?.properties || {},
+        required: f.parameters?.required || [],
+      },
+    },
+  }));
+}
+
+export async function grokAssistant(env, { messages, system, helpers, context }) {
   const key = env.XAI_API_KEY || env.GROK_API_KEY;
-  if (!key) return { ok: false, error: "XAI_API_KEY not set. Add it on the Worker: Settings → Variables and Secrets." };
-  const sys =
-    "You are Grok, embedded in HeyMia as the troubleshooter. Diagnose Worker, R2 vault, Gemini, deploy, DNS 1014, multipart FormBoundary junk, missing tabs, empty /files. Be short, numbered steps, no fluff. Never invent that a key is set.";
-  const user = String(question || "").slice(0, 2000) + (context ? "\n\nContext:\n" + String(context).slice(0, 2500) : "");
-  const res = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-    body: JSON.stringify({
-      model: "grok-4.5",
-      max_tokens: 700,
-      messages: [
-        { role: "system", content: sys },
-        { role: "user", content: user },
-      ],
-    }),
+  if (!key) return { ok: false, error: "XAI_API_KEY not set" };
+  const msgs = [{ role: "system", content: system + (context ? "\n\n" + context : "") }];
+  for (const m of (messages || []).slice(-16)) {
+    msgs.push({
+      role: m.role === "assistant" || m.role === "model" ? "assistant" : "user",
+      content: String(m.content || ""),
+    });
+  }
+  if (msgs.length < 2) msgs.push({ role: "user", content: "Hello" });
+  let lastSite = null;
+  for (let round = 0; round < 4; round++) {
+    const res = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+      body: JSON.stringify({
+        model: "grok-4.5",
+        max_tokens: 1200,
+        messages: msgs,
+        tools: openaiTools(),
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error?.message || "xAI HTTP " + res.status };
+    const msg = data.choices?.[0]?.message || {};
+    const calls = msg.tool_calls || [];
+    if (!calls.length) {
+      const text = String(msg.content || "").trim();
+      if (!text) return { ok: false, error: "Grok returned empty" };
+      return { ok: true, text, model: "grok-4.5", site: lastSite };
+    }
+    msgs.push({ role: "assistant", content: msg.content || "", tool_calls: calls });
+    for (const call of calls) {
+      let args = {};
+      try { args = JSON.parse(call.function?.arguments || "{}"); } catch {}
+      const result = helpers && helpers.runTool
+        ? await helpers.runTool(call.function?.name, args)
+        : { error: "no tools" };
+      if (result && result.url) lastSite = result;
+      msgs.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify(result || {}),
+      });
+    }
+  }
+  return { ok: false, error: "Grok tool loop exhausted" };
+}
+
+export async function grokTroubleshoot(env, { question, context }) {
+  return grokAssistant(env, {
+    messages: [{ role: "user", content: question || "" }],
+    system: "You are Grok inside HeyMia. Troubleshoot Worker, R2, Gemini, deploy, DNS 1014, FormBoundary junk, empty /files. Short numbered steps. Never invent that a key is set.",
+    context,
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { ok: false, error: data.error?.message || "xAI HTTP " + res.status };
-  const text = data.choices?.[0]?.message?.content || "";
-  if (!text) return { ok: false, error: "Grok returned empty" };
-  return { ok: true, text, model: "grok-4.5" };
 }
 
 export async function handleAgentChat(env, body, helpers) {
@@ -226,17 +275,17 @@ export async function handleAgentChat(env, body, helpers) {
   let lastErr = null;
   let lastToolSite = null;
 
-  if (wantsGrok) {
-    try {
-      const g = await grokTroubleshoot(env, {
-        question: lastUser,
-        context: filesNote + (body.context ? "\n" + body.context : ""),
-      });
-      if (g.ok) return pack(g.text, { model: g.model, grok: true });
-      lastErr = g.error;
-    } catch (err) {
-      lastErr = String(err.message || err);
-    }
+  const grok = await grokAssistant(env, {
+    messages,
+    system,
+    helpers,
+    context: filesNote + (body.context ? "\n" + body.context : ""),
+  });
+  if (grok.ok) return pack(grok.text, { model: grok.model, grok: true, site: grok.site });
+  lastErr = grok.error;
+
+  if (wantsGrok && grok.error) {
+    lastErr = grok.error;
   }
 
   if (geminiKey) {
