@@ -3,8 +3,9 @@ import { handleAgentChat, routeFile, grokTroubleshoot } from "./ai.js";
 import { handleUiAdmin, matchHtmlPage, serveUI, unwrapHtml } from "./routing.js";
 import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound, designSiteHtml } from "./sites.js";
 import { classifyProject, organizeVault, listProducts, seedProducts } from "./projects.js";
+import { seedMarketing, listMarketing, saveMarketing, CAPCUT_FREE, MARKETING_KINDS } from "./marketing.js";
 
-const VERSION = "3.4.0";
+const VERSION = "3.5.0";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -297,6 +298,9 @@ export default {
             if (name === "worker_status") return statusPayload(env);
             if (name === "list_vault") return { files: await listR2Files(env, args.prefix || "") };
             if (name === "organize_vault") return organizeVault(env);
+            if (name === "seed_marketing") return seedMarketing(env);
+            if (name === "list_marketing") return listMarketing(env, args.project);
+            if (name === "save_marketing") return saveMarketing(env, args);
             if (name === "publish_site") {
               if (!vaultBound(env)) return { error: "VAULT unbound" };
               return publishSite(env, args);
@@ -422,8 +426,23 @@ export default {
       if (path === "/api/products" && method === "POST") {
         if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
         const seeded = await seedProducts(env);
+        const mkt = await seedMarketing(env);
         const org = await organizeVault(env);
-        return jsonR({ ok: true, ...seeded, organize: org });
+        return jsonR({ ok: true, ...seeded, marketing: mkt, organize: org });
+      }
+      if (path === "/api/marketing" && method === "GET") {
+        if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
+        const project = url.searchParams.get("project") || "";
+        return jsonR({ ...(await listMarketing(env, project)), capcut: CAPCUT_FREE, kinds: MARKETING_KINDS });
+      }
+      if (path === "/api/marketing" && method === "POST") {
+        if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
+        const body = await request.json().catch(() => ({}));
+        if (body.action === "seed" || !body.name) {
+          const mkt = await seedMarketing(env);
+          return jsonR(mkt);
+        }
+        return jsonR(await saveMarketing(env, body));
       }
 
       if (path === "/api/grok" && method === "GET") {

@@ -21,14 +21,11 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
 .tab-active { background:linear-gradient(90deg,#ec4899,#a855f7); color:white; }
 .preview-empty { background:radial-gradient(circle at center,#1e1b4b 0%,#07060a 70%); }
 @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-@media (max-width: 768px) {
-  #mia-aside { width: 100% !important; max-width: none; max-height: 38vh; }
-  #vault-cats { width: 9rem !important; }
-  .resize-handle { display: none; }
-}
-.resize-handle { width:5px; cursor:col-resize; flex-shrink:0; background:transparent; position:relative; z-index:5; }
-.resize-handle:hover, .resize-handle.dragging { background:rgba(236,72,153,0.45); }
+.fade-in { animation:fadeIn .3s ease forwards; }
+.resize-handle { width:8px; cursor:col-resize; flex-shrink:0; background:rgba(255,255,255,0.08); position:relative; z-index:20; }
+.resize-handle:hover, .resize-handle.dragging { background:rgba(236,72,153,0.65); }
 #mia-aside, #vault-cats, #vault-preview { min-width:140px; max-width:55vw; }
+#tool-projects { padding-right: 1.25rem; }
 </style>
 </head>
 <body class="flex flex-col h-screen">
@@ -143,7 +140,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
       <button onclick="switchTool('workflow')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="workflow">Workflow</button>
       <button onclick="switchTool('checklist')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="checklist">Checklist</button>
       <button onclick="switchTool('training')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="training">Daily Training</button>
-      <button onclick="switchTool('editor')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="editor">CapCut Editor</button>
+      <button onclick="switchTool('editor')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="editor">Marketing</button>
       <button onclick="switchTool('replace')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="replace">Find & Replace</button>
       <button onclick="switchTool('deploy')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="deploy">Deploy</button>
       <button onclick="switchTool('sites')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="sites">Sites</button>
@@ -159,17 +156,17 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
     <!-- Tool panels -->
     <div class="flex-1 overflow-hidden relative">
 
-      <div id="tool-projects" class="absolute inset-0 overflow-y-auto p-4 md:p-6">
-        <div class="max-w-5xl mx-auto">
-          <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
-            <div>
+      <div id="tool-projects" class="absolute inset-0 overflow-y-auto overflow-x-hidden p-4">
+        <div class="w-full max-w-4xl">
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <div class="min-w-0 pr-2">
               <h2 class="text-lg font-bold serif">Projects</h2>
-              <p class="text-[11px] text-slate-400">Phone or laptop — tap a card to open files. Empty boards are ready for uploads.</p>
+              <p class="text-[11px] text-slate-400">Tap a card to open files. Drag the pink bars to resize panels.</p>
             </div>
-            <button onclick="seedProductsNow()" class="px-3 py-2 rounded-xl bg-pink-600 text-xs font-bold">Refresh folders</button>
+            <button onclick="seedProductsNow()" class="shrink-0 px-3 py-2 rounded-xl bg-pink-600 text-xs font-bold whitespace-nowrap">Refresh folders</button>
           </div>
-          <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
-          <div id="product-files" class="mt-4 hidden"></div>
+          <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-16"></div>
+          <div id="product-files" class="mt-4 hidden pb-16"></div>
         </div>
       </div>
 
@@ -276,23 +273,55 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
         </div>
       </div>
 
-      <!-- CAPCUT EDITOR -->
-      <div id="tool-editor" class="absolute inset-0 hidden flex flex-col bg-black/30">
-        <div class="flex-1 flex items-center justify-center p-6">
-          <div class="w-full max-w-3xl aspect-video rounded-2xl overflow-hidden border border-white/10 bg-black relative">
-            <video id="ed-video" class="w-full h-full object-contain" controls></video>
-            <div id="ed-overlay" class="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div id="ed-text" class="text-3xl font-bold text-white drop-shadow-lg opacity-0"></div>
+      <!-- MARKETING / CAPCUT -->
+      <div id="tool-editor" class="absolute inset-0 hidden overflow-y-auto overflow-x-hidden p-4">
+        <div class="max-w-5xl pb-16">
+          <div class="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h2 class="text-lg font-bold serif">Marketing studio</h2>
+              <p class="text-[11px] text-slate-400">Clips, videos, posts → filed under each product. CapCut free tools (1080p) open in a new tab.</p>
+            </div>
+            <button onclick="seedMarketingNow()" class="shrink-0 px-3 py-2 rounded-xl bg-pink-600 text-xs font-bold whitespace-nowrap">Create folders</button>
+          </div>
+          <div class="flex flex-wrap gap-2 mb-3" id="mkt-projects"></div>
+          <div class="flex flex-wrap gap-1 mb-4" id="mkt-kinds"></div>
+          <div class="grid lg:grid-cols-2 gap-3">
+            <div class="glass rounded-2xl p-4 border border-white/10 space-y-2">
+              <label class="text-[10px] text-slate-400">Brief</label>
+              <textarea id="mkt-brief" rows="3" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm" placeholder="Hook for Missing Cash unclaimed money… 15s Reel"></textarea>
+              <div class="flex gap-2">
+                <button onclick="mktWriteScript()" class="flex-1 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-xs font-bold">Write script</button>
+                <button onclick="mktSaveScript()" class="flex-1 py-2 rounded-xl glass-light text-xs font-bold">Save to folder</button>
+              </div>
+              <textarea id="mkt-script" rows="8" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono" placeholder="Script / captions land here"></textarea>
+              <div class="flex gap-2">
+                <button onclick="mktDrawPost()" class="flex-1 py-2 rounded-xl bg-emerald-600 text-xs font-bold">Make post still</button>
+                <button onclick="mktSavePost()" class="flex-1 py-2 rounded-xl glass-light text-xs font-bold">Save PNG</button>
+              </div>
+              <canvas id="mkt-canvas" width="1080" height="1080" class="w-full rounded-xl border border-white/10 bg-black"></canvas>
+              <div id="mkt-status" class="text-[11px] text-slate-400"></div>
+            </div>
+            <div class="space-y-3">
+              <div class="glass rounded-2xl p-4 border border-white/10">
+                <div class="text-xs font-bold mb-2">CapCut free (no Pro)</div>
+                <p class="text-[10px] text-slate-500 mb-2">Free: timeline, captions, TTS, templates, 1080p export. Pro locks 4K and some effects — skip those.</p>
+                <div id="mkt-capcut" class="grid grid-cols-2 gap-2"></div>
+              </div>
+              <div class="glass rounded-2xl p-4 border border-white/10">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-xs font-bold">Folder</div>
+                  <button onclick="mktList()" class="text-[10px] text-pink-300">Reload</button>
+                </div>
+                <div id="mkt-files" class="text-[11px] text-slate-400 space-y-1 max-h-64 overflow-y-auto">Create folders, then produce.</div>
+              </div>
+              <div class="w-full aspect-video rounded-2xl overflow-hidden border border-white/10 bg-black relative">
+                <video id="ed-video" class="w-full h-full object-contain" controls></video>
+                <div id="ed-overlay" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div id="ed-text" class="text-2xl font-bold text-white drop-shadow-lg opacity-0"></div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="h-28 border-t border-white/10 glass p-3">
-          <div class="flex items-center gap-2 mb-2">
-            <button onclick="edAction('text')" class="px-3 py-1.5 rounded-lg glass-light text-xs">Add Text</button>
-            <button onclick="edAction('filter')" class="px-3 py-1.5 rounded-lg glass-light text-xs">Filter</button>
-            <button onclick="edAction('export')" class="ml-auto px-4 py-1.5 rounded-lg bg-gradient-to-r from-pink-600 to-purple-600 text-xs font-bold">Export</button>
-          </div>
-          <input id="ed-text-input" type="text" placeholder="Overlay text..." class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs focus:outline-none" oninput="document.getElementById('ed-text').textContent=this.value;document.getElementById('ed-text').style.opacity=this.value?1:0">
         </div>
       </div>
 
@@ -845,6 +874,7 @@ function switchTool(t) {
   if (t === 'deploy') { renderDeploy(); try { renderPublish(); } catch (e) {} }
   if (t === 'sites') { try { renderPublishedSites(); } catch (e) {} }
   if (t === 'projects') { try { renderProducts(); } catch (e) {} }
+  if (t === 'editor') { try { renderMarketing(); } catch (e) {} }
 
   document.querySelectorAll('.tool-tab').forEach(btn => {
     const base = 'tool-tab px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 ';
@@ -945,6 +975,26 @@ async function sendToMia(e) {
   if (/\\b(organis|organiz|file (these|the) (files|vault)|project folder|sort the vault)\\b/i.test(text)) {
     switchTool('vault');
     organizeVaultNow();
+    return;
+  }
+  if (/\\b(clip|reel|tiktok|caption|capcut|marketing (post|video)|make a post|make a video|make a clip)\\b/i.test(text)) {
+    switchTool('editor');
+    const brief = document.getElementById('mkt-brief');
+    if (brief && !brief.value) brief.value = text;
+    const hit = PRODUCTS_UI.find((p) => text.toLowerCase().includes(p.slug) || text.toLowerCase().includes((p.name.split(' ')[0] || '').toLowerCase()));
+    if (hit) state.mktProject = hit.slug;
+    renderMarketing();
+    mktWriteScript();
+    return;
+  }
+  if (/\\b(clip|reel|tiktok|caption|capcut|marketing (post|video)|make a post|make a video)\\b/i.test(text)) {
+    switchTool('editor');
+    const brief = document.getElementById('mkt-brief');
+    if (brief && !brief.value) brief.value = text;
+    const hit = PRODUCTS_UI.find((p) => text.toLowerCase().includes(p.slug) || text.toLowerCase().includes(p.name.toLowerCase().split(' ')[0]));
+    if (hit) state.mktProject = hit.slug;
+    renderMarketing();
+    mktWriteScript();
     return;
   }
   if (state.miaMode === 'grok' || /^(grok|troubleshoot)\\b/i.test(text) || /\\b(troubleshoot|debug this|form.?boundary)\\b/i.test(text)) {
@@ -1960,6 +2010,135 @@ function doFindReplace(execute) {
   if (execute) addMia(\`Find & Replace completed — \${total} replacements across content store.\`);
 }
 
+// ========== MARKETING STUDIO ==========
+const MKT_CAPCUT = [
+  { name:'CapCut editor', url:'https://www.capcut.com/editor', use:'Timeline · trim · text · 1080p' },
+  { name:'Templates', url:'https://www.capcut.com/explore', use:'Free trending templates' },
+  { name:'Auto captions', url:'https://www.capcut.com/tools/auto-captions', use:'Burn captions' },
+  { name:'Text to speech', url:'https://www.capcut.com/tools/text-to-speech', use:'Voice from script' },
+  { name:'Background remover', url:'https://www.capcut.com/tools/background-remover', use:'Cut-out' },
+  { name:'Auto cut', url:'https://www.capcut.com/tools/auto-cut', use:'Jump cuts' },
+  { name:'AI writer', url:'https://www.capcut.com/tools/ai-writer', use:'Hooks / CTAs' },
+  { name:'Text to video', url:'https://www.capcut.com/tools/text-to-video', use:'Script → clip' },
+  { name:'Image to video', url:'https://www.capcut.com/tools/image-to-video', use:'Still → motion' },
+  { name:'Script to video', url:'https://www.capcut.com/tools/script-to-video', use:'Shot assembly' },
+  { name:'Noise reduction', url:'https://www.capcut.com/tools/noise-reduction', use:'Clean audio' },
+  { name:'Video enhancer', url:'https://www.capcut.com/tools/video-enhancer', use:'Sharpen 1080p' },
+];
+const MKT_KINDS = [
+  { id:'clips', name:'Clips' }, { id:'videos', name:'Videos' }, { id:'posts', name:'Posts' },
+  { id:'stories', name:'Stories' }, { id:'ads', name:'Ads' }, { id:'scripts', name:'Scripts' }, { id:'captions', name:'Captions' },
+];
+state.mktProject = 'lensflow';
+state.mktKind = 'clips';
+
+function renderMarketing() {
+  const pbox = document.getElementById('mkt-projects');
+  const kbox = document.getElementById('mkt-kinds');
+  const cbox = document.getElementById('mkt-capcut');
+  if (pbox) pbox.innerHTML = PRODUCTS_UI.map((p) => \`<button onclick="state.mktProject='\${p.slug}';renderMarketing();mktList()" class="px-2 py-1 rounded-lg text-[10px] font-bold \${state.mktProject===p.slug?'tab-active':'glass-light'}">\${p.name}</button>\`).join('');
+  if (kbox) kbox.innerHTML = MKT_KINDS.map((k) => \`<button onclick="state.mktKind='\${k.id}';renderMarketing();mktList()" class="px-2 py-1 rounded-md text-[10px] \${state.mktKind===k.id?'bg-pink-600/80':'glass-light'}">\${k.name}</button>\`).join('');
+  if (cbox) cbox.innerHTML = MKT_CAPCUT.map((t) => \`<a class="glass-light rounded-xl p-2 block hover:border-pink-500/40 border border-transparent" href="\${t.url}" target="_blank" rel="noopener"><div class="text-[11px] font-bold">\${t.name}</div><div class="text-[10px] text-slate-500">\${t.use}</div></a>\`).join('');
+  mktList();
+}
+
+async function seedMarketingNow() {
+  const st = document.getElementById('mkt-status');
+  if (st) st.textContent = 'Creating marketing folders…';
+  try {
+    await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/marketing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'seed' }) });
+    if (st) st.textContent = 'Folders ready: clips, videos, posts, stories, ads, scripts, captions × 5 products.';
+    addMia('Marketing folders created under each project.');
+    mktList();
+  } catch (e) {
+    if (st) st.textContent = 'Need Worker v3.5 — ' + (e.message || e);
+  }
+}
+
+async function mktList() {
+  const box = document.getElementById('mkt-files');
+  if (!box) return;
+  try {
+    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/marketing?project=' + encodeURIComponent(state.mktProject));
+    const d = await res.json();
+    const files = (d.files || []).filter((f) => f.key.indexOf('/marketing/' + state.mktKind + '/') > -1);
+    box.innerHTML = files.length ? files.map((f) => \`<div class="truncate">\${escapeHtml(f.key.split('/').pop())}</div>\`).join('') : '<div>Empty — save a script or PNG into ' + state.mktProject + '/' + state.mktKind + '</div>';
+  } catch (e) {
+    box.textContent = 'Folders not on this Worker yet.';
+  }
+}
+
+async function mktWriteScript() {
+  const brief = (document.getElementById('mkt-brief').value || '').trim() || ('15s marketing clip for ' + state.mktProject);
+  document.getElementById('mkt-status').textContent = 'Mia writing…';
+  const prompt = 'Write a 15-second marketing SCRIPT and on-screen CAPTIONS for product ' + state.mktProject + ' as a ' + state.mktKind + '. Brief: ' + brief + '. Format:\\nHOOK:\\nSCRIPT:\\nCAPTIONS:\\nCTA:\\nThen tell me which CapCut free tool to open.';
+  try {
+    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: prompt, messages:[{role:'user', content: prompt}], agent:'Mia', mode:'work' }) });
+    const d = await res.json();
+    document.getElementById('mkt-script').value = d.reply || d.response || '';
+    document.getElementById('mkt-status').textContent = 'Script ready. Save it, then open CapCut TTS / captions.';
+  } catch (e) {
+    document.getElementById('mkt-status').textContent = String(e.message || e);
+  }
+}
+
+async function mktSaveScript() {
+  const text = document.getElementById('mkt-script').value || '';
+  if (!text.trim()) return;
+  const name = 'script-' + Date.now() + '.txt';
+  const kind = (state.mktKind === 'posts' || state.mktKind === 'clips' || state.mktKind === 'videos' || state.mktKind === 'ads' || state.mktKind === 'stories') ? 'scripts' : state.mktKind;
+  const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/marketing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ project: state.mktProject, kind, name, content: text, type: 'text/plain;charset=UTF-8' }) });
+  const d = await res.json();
+  document.getElementById('mkt-status').textContent = d.ok ? 'Saved ' + d.key : (d.error || 'save failed');
+  addMia(d.ok ? 'Filed script into ' + d.key : 'Save failed');
+  mktList();
+}
+
+function mktDrawPost() {
+  const c = document.getElementById('mkt-canvas');
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height;
+  const g = ctx.createLinearGradient(0,0,w,h);
+  g.addColorStop(0,'#2e1065'); g.addColorStop(1,'#9d174d');
+  ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+  const p = PRODUCTS_UI.find((x) => x.slug === state.mktProject);
+  const script = (document.getElementById('mkt-script').value || '').split('\\n').filter(Boolean);
+  const hook = (script.find((l) => /^HOOK/i.test(l)) || script[0] || (p && p.name) || 'HeyMia').replace(/^HOOK:\\s*/i,'');
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 72px Plus Jakarta Sans, sans-serif';
+  wrapCanvasText(ctx, hook.slice(0, 90), 80, 280, w - 160, 84);
+  ctx.font = '32px Plus Jakarta Sans, sans-serif';
+  ctx.fillStyle = '#f9a8d4';
+  ctx.fillText((p && p.name) || state.mktProject, 80, h - 140);
+  ctx.fillStyle = '#fff';
+  ctx.font = '28px Plus Jakarta Sans, sans-serif';
+  const url = (p && p.urls && p.urls[0]) ? p.urls[0].replace(/^https?:\\/\\//,'') : 'heymia.lensflow.au';
+  ctx.fillText(url, 80, h - 90);
+}
+
+function wrapCanvasText(ctx, text, x, y, maxW, lh) {
+  const words = String(text).split(' ');
+  let line = '', yy = y;
+  for (const w of words) {
+    const test = line + w + ' ';
+    if (ctx.measureText(test).width > maxW) { ctx.fillText(line, x, yy); line = w + ' '; yy += lh; }
+    else line = test;
+  }
+  ctx.fillText(line, x, yy);
+}
+
+async function mktSavePost() {
+  mktDrawPost();
+  const c = document.getElementById('mkt-canvas');
+  const data = c.toDataURL('image/png');
+  const name = 'post-' + Date.now() + '.png';
+  const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/marketing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ project: state.mktProject, kind: 'posts', name, content: data, type: 'image/png' }) });
+  const d = await res.json();
+  document.getElementById('mkt-status').textContent = d.ok ? 'Saved ' + d.key : (d.error || 'save failed');
+  addMia(d.ok ? 'Post still filed in ' + d.key : 'PNG save failed');
+  mktList();
+}
+
 // ========== CAPCUT EDITOR ==========
 function edAction(act) {
   if (act === 'export') {
@@ -2391,7 +2570,7 @@ function showPhoneLink() {
     preview: () => document.getElementById('vault-preview'),
   };
   document.querySelectorAll('.resize-handle').forEach(h => {
-    h.addEventListener('mousedown', e => {
+    h.addEventListener('pointerdown', e => {
       const key = h.getAttribute('data-resize');
       const el = targets[key]?.();
       if (!el) return;
@@ -2399,16 +2578,17 @@ function showPhoneLink() {
       startX = e.clientX;
       startW = el.getBoundingClientRect().width;
       h.classList.add('dragging');
+      h.setPointerCapture(e.pointerId);
       e.preventDefault();
     });
   });
-  window.addEventListener('mousemove', e => {
+  window.addEventListener('pointermove', e => {
     if (!active) return;
     const dx = (e.clientX - startX) * active.dir;
     const w = Math.min(Math.max(startW + dx, 140), window.innerWidth * 0.55);
     active.el.style.width = w + 'px';
   });
-  window.addEventListener('mouseup', () => {
+  window.addEventListener('pointerup', () => {
     if (!active) return;
     active.handle.classList.remove('dragging');
     try {

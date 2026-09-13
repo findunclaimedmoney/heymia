@@ -88,6 +88,10 @@ export async function seedProducts(env) {
     }
     created.push(p.slug);
   }
+  try {
+    const { seedMarketing } = await import("./marketing.js");
+    await seedMarketing(env);
+  } catch {}
   return { ok: true, products: created };
 }
 
