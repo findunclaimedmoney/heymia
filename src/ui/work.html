@@ -82,6 +82,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
         <button type="button" onclick="setMiaMode('plain')" data-mode="plain" class="mia-mode px-2 py-0.5 rounded-md text-[10px] font-bold tab-active">Plain</button>
         <button type="button" onclick="setMiaMode('soft')" data-mode="soft" class="mia-mode px-2 py-0.5 rounded-md text-[10px] font-bold glass-light text-slate-300">Soft</button>
         <button type="button" onclick="setMiaMode('build')" data-mode="build" class="mia-mode px-2 py-0.5 rounded-md text-[10px] font-bold glass-light text-slate-300">Build</button>
+        <button type="button" onclick="setMiaMode('grok')" data-mode="grok" class="mia-mode px-2 py-0.5 rounded-md text-[10px] font-bold glass-light text-slate-300">Grok</button>
       </div>
       <div class="flex flex-wrap gap-1">
         <button type="button" onclick="toggleSkill('vault')" data-skill="vault" class="mia-skill px-2 py-0.5 rounded-md text-[9px] glass-light text-pink-300">Vault</button>
@@ -827,6 +828,33 @@ function switchTool(t) {
   });
 }
 
+async function askGrokTroubleshoot(question) {
+  const box = document.getElementById('mia-chat');
+  const dropThinking = () => {
+    if (box && box.lastChild && /Asking Grok|Thinking/.test(box.lastChild.textContent || '')) box.removeChild(box.lastChild);
+  };
+  const ctx = { href: location.href, files: state.files.length, mode: state.miaMode, worker: WORKER_BASE };
+  const urls = [location.origin + '/api/grok', String(WORKER_BASE || '').replace(/\/$/, '') + '/api/grok'];
+  for (const url of urls) {
+    if (!/^https?:/i.test(url)) continue;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, message: question, context: JSON.stringify(ctx) }),
+      });
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('json')) continue;
+      const data = await res.json();
+      dropThinking();
+      const reply = data.reply || data.text || data.error;
+      if (reply) { addMia('Grok: ' + reply); return; }
+    } catch (e) {}
+  }
+  dropThinking();
+  addMia('Grok is not wired yet. Cloudflare → Worker heymia → Settings → Variables and Secrets → add XAI_API_KEY from console.x.ai then click Grok and ask again.');
+}
+
 // ========== MIA CHAT ==========
 function addMia(text, role = 'mia') {
   try {
@@ -886,6 +914,11 @@ async function sendToMia(e) {
   if (lower.includes('train') || lower.includes('training')) {
     switchTool('training');
     addMia('Daily Training panel open. Write what you want me to remember.');
+    return;
+  }
+  if (state.miaMode === 'grok' || /^(grok|troubleshoot)\b/i.test(text) || /\b(troubleshoot|debug this|form.?boundary)\b/i.test(text)) {
+    addMia('Asking Grok…');
+    askGrokTroubleshoot(text);
     return;
   }
   if (/\b(web\s?site|landing\s?page|design (a |the )?site|build (a |the )?site|create (a |the )?site)\b/i.test(text)) {
@@ -2427,6 +2460,7 @@ const MIA_MODES = {
   plain: 'Mode PLAIN: clear, direct, no fluff, not rude. Short practical answers.',
   soft: 'Mode SOFT: warm, conversational, patient. You may use a gentle line of small talk. Still helpful.',
   build: 'Mode BUILD: technical and structured. Prefer steps, checklists, file names, commands. No emotional filler.',
+  grok: 'Mode GROK: xAI Grok-4.5 troubleshoots the Worker, vault, deploy, DNS, and this UI. Short numbered fixes.',
 };
 
 function setMiaMode(mode, silent) {

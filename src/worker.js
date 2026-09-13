@@ -1,5 +1,5 @@
 import workHtml from "./ui/work.html.js";
-import { handleAgentChat, routeFile } from "./ai.js";
+import { handleAgentChat, routeFile, grokTroubleshoot } from "./ai.js";
 import { handleUiAdmin, matchHtmlPage, serveUI, unwrapHtml } from "./routing.js";
 import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound, designSiteHtml } from "./sites.js";
 
@@ -162,12 +162,14 @@ async function statusPayload(env) {
     last_deploy: await readLastDeploy(env),
     ai: env.AI ? "bound" : "missing",
     gemini: env.GEMINI_API_KEY || env.GEMINI ? "set" : "unset",
+    grok: env.XAI_API_KEY || env.GROK_API_KEY ? "set" : "unset",
     liveavatar: env.LIVEAVATAR_API_KEY || env.LIVEAVATAR ? "set" : "unset",
     stripe: env.STRIPE_SECRET_KEY || env.STRIPE ? "set" : "unset",
     domain: env.PUBLIC_DOMAIN || null,
     avatar_id: AVATAR_ID,
     secrets_configured: {
       liveavatar: !!(env.LIVEAVATAR_API_KEY || env.LIVEAVATAR),
+      grok: !!(env.XAI_API_KEY || env.GROK_API_KEY),
       stripe: !!(env.STRIPE_SECRET_KEY || env.STRIPE),
       ai: !!(env.GEMINI_API_KEY || env.GEMINI),
       workers_ai: !!env.AI,
@@ -330,6 +332,19 @@ export default {
           const rec = await runDeploy(env, await request.json());
           return jsonR(rec, rec.ok ? 200 : 400);
         }
+      }
+
+      if (path === "/api/grok" && method === "GET") {
+        return jsonR({ ok: true, grok: !!(env.XAI_API_KEY || env.GROK_API_KEY), model: "grok-4.5" });
+      }
+      if (path === "/api/grok" && method === "POST") {
+        const body = await request.json().catch(() => ({}));
+        const status = await statusPayload(env);
+        const g = await grokTroubleshoot(env, {
+          question: body.question || body.message || "",
+          context: JSON.stringify({ status, last_deploy: status.last_deploy, extra: body.context || "" }).slice(0, 2500),
+        });
+        return jsonR({ reply: g.text || g.error, response: g.text || g.error, ...g });
       }
 
       if (path === "/api/design" && method === "POST") {
