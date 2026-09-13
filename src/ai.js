@@ -6,7 +6,7 @@ const WORKERS_AI_MODELS = [
 ];
 
 const AGENT_PROMPTS = {
-  Mia: "You are Mia, powered by Grok 4.5 — John Morgan's full assistant for LensFlow, Glimr, Missing Cash and HeyMia. Same class as Grok in the xAI app: reason, write, design, debug, and ship. You have hands (tools): worker_status, list_vault, design_site, list_sites, publish_site, route_file, last_deploy, create_room. Use them. If they want a website, call design_site. If something is broken, call worker_status and last_deploy. Do not play small. Do not say you only route files. Never invent secrets or that a key is set. After a tool runs, answer with what happened and the URL if any.",
+  Mia: "You are Mia, powered by Grok 4.5 — John Morgan's full assistant for LensFlow, Glimr, Missing Cash and HeyMia. Same class as Grok in the xAI app: reason, write, design, debug, and ship. You have hands: worker_status, list_vault, read_file, create_file, design_site, create_site, list_sites, publish_site, route_file, last_deploy, deploy_status, save_memory, recall_memory, create_room. USE them. Build a website → design_site. Check files → list_vault then read_file. Remember a fact → save_memory. Never invent secrets. After a tool runs, say what happened and any URL.",
   Jess: "You are Jess, a warm companion in Play mode. Conversational and ready for LiveAvatar. Do not invent business facts.",
 };
 
@@ -75,6 +75,76 @@ const TOOLS = [
       {
         name: "last_deploy",
         description: "Return the last website deploy result: success or fail, URL, error, timestamp.",
+        parameters: { type: "OBJECT", properties: {}, required: [] },
+      },
+      {
+        name: "create_file",
+        description: "Write a file into the R2 vault (HTML, JS, JSON, text, markdown).",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            name: { type: "STRING", description: "File name, e.g. landing.html" },
+            content: { type: "STRING", description: "Full file contents" },
+            type: { type: "STRING", description: "MIME type" },
+            category: { type: "STRING" },
+          },
+          required: ["name", "content"],
+        },
+      },
+      {
+        name: "read_file",
+        description: "Read a vault file by key or name and return text (truncated).",
+        parameters: {
+          type: "OBJECT",
+          properties: { key: { type: "STRING" }, name: { type: "STRING" } },
+          required: [],
+        },
+      },
+      {
+        name: "save_memory",
+        description: "Persist a fact, preference, or training note for later recall.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            key: { type: "STRING" },
+            value: { type: "STRING" },
+            category: { type: "STRING", description: "training | general | work" },
+          },
+          required: ["key", "value"],
+        },
+      },
+      {
+        name: "recall_memory",
+        description: "Recall saved notes. Empty key lists recent memories in that category.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            key: { type: "STRING" },
+            category: { type: "STRING" },
+          },
+          required: [],
+        },
+      },
+      {
+        name: "create_site",
+        description: "Alias of design_site: design and publish a website to /s/{slug}/.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            name: { type: "STRING" },
+            brief: { type: "STRING" },
+            tagline: { type: "STRING" },
+            style: { type: "STRING" },
+            industry: { type: "STRING" },
+            slug: { type: "STRING" },
+            html: { type: "STRING" },
+          },
+          required: ["name"],
+        },
+      },
+      {
+        name: "deploy_status",
+        description: "Last deploy result plus worker/vault/AI status.",
         parameters: { type: "OBJECT", properties: {}, required: [] },
       },
       {
@@ -155,18 +225,25 @@ function callsFromCandidate(data) {
 
 function openaiTools() {
   const decls = (TOOLS[0] && TOOLS[0].functionDeclarations) || [];
-  return decls.map((f) => ({
-    type: "function",
-    function: {
-      name: f.name,
-      description: f.description,
-      parameters: {
-        type: "object",
-        properties: f.parameters?.properties || {},
-        required: f.parameters?.required || [],
+  const lower = (n) => ({ OBJECT: "object", STRING: "string", NUMBER: "number", BOOLEAN: "boolean", ARRAY: "array" }[n] || String(n || "string").toLowerCase());
+  return decls.map((f) => {
+    const props = {};
+    for (const [k, v] of Object.entries(f.parameters?.properties || {})) {
+      props[k] = { ...v, type: lower(v.type) };
+    }
+    return {
+      type: "function",
+      function: {
+        name: f.name,
+        description: f.description,
+        parameters: {
+          type: "object",
+          properties: props,
+          required: f.parameters?.required || [],
+        },
       },
-    },
-  }));
+    };
+  });
 }
 
 export async function grokAssistant(env, { messages, system, helpers, context }) {
@@ -189,11 +266,17 @@ export async function grokAssistant(env, { messages, system, helpers, context })
         model: "grok-4.5",
         max_tokens: 1200,
         messages: msgs,
-        tools: openaiTools(),
+        ...(helpers && helpers.runTool ? { tools: openaiTools() } : {}),
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: data.error?.message || "xAI HTTP " + res.status };
+    if (!res.ok) {
+      const msg = data.error?.message || "xAI HTTP " + res.status;
+      if (res.status === 403) {
+        return { ok: false, error: "Grok 403: XAI_API_KEY is set but xAI has no credits. Add balance at console.x.ai — Mia stays on Gemini until then." };
+      }
+      return { ok: false, error: msg };
+    }
     const msg = data.choices?.[0]?.message || {};
     const calls = msg.tool_calls || [];
     if (!calls.length) {
