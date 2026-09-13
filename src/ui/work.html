@@ -1,4 +1,4 @@
-export default `<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -82,6 +82,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
         <button type="button" onclick="setMiaMode('plain')" data-mode="plain" class="mia-mode px-2 py-0.5 rounded-md text-[10px] font-bold tab-active">Plain</button>
         <button type="button" onclick="setMiaMode('soft')" data-mode="soft" class="mia-mode px-2 py-0.5 rounded-md text-[10px] font-bold glass-light text-slate-300">Soft</button>
         <button type="button" onclick="setMiaMode('build')" data-mode="build" class="mia-mode px-2 py-0.5 rounded-md text-[10px] font-bold glass-light text-slate-300">Build</button>
+        <button type="button" onclick="setMiaMode('grok')" data-mode="grok" class="mia-mode px-2 py-0.5 rounded-md text-[10px] font-bold glass-light text-slate-300">Grok</button>
       </div>
       <div class="flex flex-wrap gap-1">
         <button type="button" onclick="toggleSkill('vault')" data-skill="vault" class="mia-skill px-2 py-0.5 rounded-md text-[9px] glass-light text-pink-300">Vault</button>
@@ -663,7 +664,7 @@ const state = {
   currentCat: 'all',
   deployQueue: [],
   contentStore: [
-    { id:'s1', name:'Jess Bedroom Intro', content:'Welcome to my private Fan Studio! We have 5 minutes together in The Bedroom. What\\'s on your mind today?' },
+    { id:'s1', name:'Jess Bedroom Intro', content:'Welcome to my private Fan Studio! We have 5 minutes together in The Bedroom. What\'s on your mind today?' },
     { id:'s2', name:'Landing Headline', content:'She remembers what every other girl forgets. Real conversation. Real connection.' },
     { id:'s3', name:'Promo Link', content:'https://www.heymia.lensflow.au/studio/bedroom?ref=promo5' },
   ],
@@ -788,7 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
   try { maybeAutoDailyReport(); } catch (e) {}
   try { updateQuoteStatus(); renderTriggerPanel(); } catch (e) {}
   const geminiMsg = state.geminiKey ? 'Gemini AI active.' : 'Add Gemini / Cloudflare / Stripe keys in the gear (Variables & Secrets).';
-  addMia('System ready. Domain: ' + PUBLIC_DOMAIN + '. Vault, Deploy, API, Shell, GitHub, Knowledge and Trainer are live. ' + geminiMsg);
+  addMia('Mia online — Grok 4.5 assistant. Vault, Sites, Deploy and troubleshooting are in my hands. ' + geminiMsg);
 });
 
 // ========== MODE / TOOL SWITCH ==========
@@ -827,15 +828,42 @@ function switchTool(t) {
   });
 }
 
+async function askGrokTroubleshoot(question) {
+  const box = document.getElementById('mia-chat');
+  const dropThinking = () => {
+    if (box && box.lastChild && /Asking Grok|Thinking/.test(box.lastChild.textContent || '')) box.removeChild(box.lastChild);
+  };
+  const ctx = { href: location.href, files: state.files.length, mode: state.miaMode, worker: WORKER_BASE };
+  const urls = [location.origin + '/api/grok', String(WORKER_BASE || '').replace(/\/$/, '') + '/api/grok'];
+  for (const url of urls) {
+    if (!/^https?:/i.test(url)) continue;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, message: question, context: JSON.stringify(ctx) }),
+      });
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('json')) continue;
+      const data = await res.json();
+      dropThinking();
+      const reply = data.reply || data.text || data.error;
+      if (reply) { addMia('Grok: ' + reply); return; }
+    } catch (e) {}
+  }
+  dropThinking();
+  addMia('Grok is not wired yet. Cloudflare → Worker heymia → Settings → Variables and Secrets → add XAI_API_KEY from console.x.ai then click Grok and ask again.');
+}
+
 // ========== MIA CHAT ==========
 function addMia(text, role = 'mia') {
   try {
     const _t = String(arguments[0] || '');
     const isUser = arguments[1] === 'user';
     if (!isUser && _t) {
-      if (/I hear you|Tell me more|What do you need right now|I.m here\\./i.test(_t)) trackMiaSignal('fallback');
+      if (/I hear you|Tell me more|What do you need right now|I.m here\./i.test(_t)) trackMiaSignal('fallback');
       else trackMiaSignal('reply', _t.length);
-      if (/\\b(no\\.|wrong\\.|don.t\\b)/i.test(_t)) trackMiaSignal('aggression');
+      if (/\b(no\.|wrong\.|don.t\b)/i.test(_t)) trackMiaSignal('aggression');
       try { scanReplyForBehavior(_t); } catch (e) {}
     }
   } catch (e) {}
@@ -843,7 +871,7 @@ function addMia(text, role = 'mia') {
   const box = document.getElementById('mia-chat');
   const div = document.createElement('div');
   div.className = (role === 'user' ? 'msg-user ml-6' : 'msg-mia mr-4') + ' rounded-2xl p-3 fade-in';
-  div.innerHTML = \`<div class="font-bold text-[10px] mb-1 \${role==='user'?'text-slate-400 text-right':'text-pink-400'}">\${role==='user'?'You':'Mia'}</div>\${escapeHtml(text)}\`;
+  div.innerHTML = `<div class="font-bold text-[10px] mb-1 ${role==='user'?'text-slate-400 text-right':'text-pink-400'}">${role==='user'?'You':'Mia'}</div>${escapeHtml(text)}`;
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
 }
@@ -854,13 +882,13 @@ async function sendToMia(e) {
   const text = input.value.trim();
   if (!text) return;
   addMia(text, 'user');
-  try { trackMiaSignal('message'); if (/\\b(wrong|not jess|not mia|stop|aggressive)\\b/i.test(text)) trackMiaSignal('correction'); } catch(e) {}
+  try { trackMiaSignal('message'); if (/\b(wrong|not jess|not mia|stop|aggressive)\b/i.test(text)) trackMiaSignal('correction'); } catch(e) {}
   input.value = '';
 
   // Fast local commands still work instantly
   const lower = text.toLowerCase();
   if (lower.includes('activate upgrade') || lower.startsWith('upgrade work')) {
-    const f = state.files.slice().reverse().find(x => x.key && /\\.html$/i.test(x.name || ''));
+    const f = state.files.slice().reverse().find(x => x.key && /\.html$/i.test(x.name || ''));
     if (f) activateUpgrade(f.key, 'work');
     else addMia('Upload an .html upgrade file first.');
     return;
@@ -888,38 +916,49 @@ async function sendToMia(e) {
     addMia('Daily Training panel open. Write what you want me to remember.');
     return;
   }
-  if (/\\b(web\\s?site|landing\\s?page|design (a |the )?site|build (a |the )?site|create (a |the )?site)\\b/i.test(text)) {
+  if (state.miaMode === 'grok' || /^(grok|troubleshoot)\b/i.test(text) || /\b(troubleshoot|debug this|form.?boundary)\b/i.test(text)) {
+    addMia('Asking Grok…');
+    askGrokTroubleshoot(text);
+    return;
+  }
+  if (/\b(web\s?site|landing\s?page|design (a |the )?site|build (a |the )?site|create (a |the )?site)\b/i.test(text)) {
     switchTool('sites');
     const brief = document.getElementById('site-brief');
     const nameEl = document.getElementById('site-name');
     if (brief && !brief.value) brief.value = text;
-    const named = text.match(/(?:called|named|for)\\s+([A-Za-z][\\w\\s]{1,40})/);
+    const named = text.match(/(?:called|named|for)\s+([A-Za-z][\w\s]{1,40})/);
     if (nameEl && named && !nameEl.value) nameEl.value = named[1].trim();
     addMia('Sites is open. I’ll design it — generating now.');
     designWebsite(true);
     return;
   }
 
-  // Worker chat then Gemini
+  // Grok-4.5 Mia first (preview /api/chat), then Worker /chat, then browser Gemini
   addMia('Thinking…');
+  const payloads = JSON.stringify({
+    message: text,
+    messages: [{ role: 'user', content: text }],
+    agent: 'Mia',
+    mode: 'work',
+    companion: 'mia',
+  });
+  const chatUrls = [location.origin + '/api/chat'];
+  if (WORKER_BASE) chatUrls.push(WORKER_BASE.replace(/\/$/, '') + '/chat');
   try {
-    if (WORKER_BASE) {
-      const wres = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          messages: [{ role: 'user', content: text }],
-          agent: 'Mia',
-          mode: 'work',
-          companion: 'mia',
-        }),
-      });
-      if (wres.ok) {
+    for (const url of chatUrls) {
+      try {
+        const wres = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payloads,
+        });
+        const ct = wres.headers.get('content-type') || '';
+        if (!wres.ok || !ct.includes('json')) continue;
         const wdata = await wres.json();
         const box = document.getElementById('mia-chat');
         if (box.lastChild && box.lastChild.textContent.includes('Thinking')) box.removeChild(box.lastChild);
-        const reply = wdata.reply || wdata.response || '…';
+        const reply = wdata.reply || wdata.response;
+        if (!reply) continue;
         addMia(reply);
         speakMiaText(reply);
         if (wdata.site && wdata.site.url) {
@@ -927,7 +966,7 @@ async function sendToMia(e) {
           addMia('Live URL: ' + wdata.site.url);
         }
         return;
-      }
+      } catch (e) {}
     }
   } catch (e) { /* fall through to Gemini */ }
 
@@ -935,14 +974,14 @@ async function sendToMia(e) {
   if (state.geminiKey) {
     try {
       const trainingContext = state.trainingNotes.length
-        ? '\\n\\nDaily training notes you must follow:\\n' + state.trainingNotes.map(n => '- ' + n.text).join('\\n')
+        ? '\n\nDaily training notes you must follow:\n' + state.trainingNotes.map(n => '- ' + n.text).join('\n')
         : '';
       const system = buildMiaSystem();
-      const res = await fetch(\`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=\${state.geminiKey}\`, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${state.geminiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: system + '\\n\\nUser: ' + text }] }],
+          contents: [{ role: 'user', parts: [{ text: system + '\n\nUser: ' + text }] }],
           generationConfig: { temperature: 0.7, maxOutputTokens: 400 }
         })
       });
@@ -993,8 +1032,8 @@ function maskKey(v) {
 function recogniseSecret(raw) {
   const v = String(raw || '').trim();
   if (!v || v.startsWith('••')) return { id: null, ok: false, label: 'empty' };
-  if (/^AIza[0-9A-Za-z_\\-]{20,}$/.test(v)) return { id: 'gemini', ok: true, label: 'Gemini / Google AI' };
-  if (/^https?:\\/\\/.+/i.test(v)) return { id: 'worker', ok: true, label: 'Worker / site URL' };
+  if (/^AIza[0-9A-Za-z_\-]{20,}$/.test(v)) return { id: 'gemini', ok: true, label: 'Gemini / Google AI' };
+  if (/^https?:\/\/.+/i.test(v)) return { id: 'worker', ok: true, label: 'Worker / site URL' };
   if (/^sk_(live|test)_[A-Za-z0-9]+/.test(v) || /^pk_(live|test)_/.test(v)) return { id: 'stripe', ok: true, label: 'Stripe' };
   if (/^sk-ant-/.test(v)) return { id: 'openai', ok: true, label: 'Anthropic Claude' };
   if (/^gsk_/.test(v)) return { id: 'openai', ok: true, label: 'Groq' };
@@ -1003,7 +1042,7 @@ function recogniseSecret(raw) {
   if (/^xi[-_]?[A-Za-z0-9]{16,}$/i.test(v)) return { id: 'elevenlabs', ok: true, label: 'ElevenLabs' };
   if (/^[a-f0-9]{32}$/i.test(v)) return { id: 'cf_account', ok: true, label: 'Cloudflare Account ID' };
   if (/^[a-f0-9]{37}$/i.test(v)) return { id: 'cf_token', ok: true, label: 'Cloudflare Global API key' };
-  if (/^[A-Za-z0-9_\\-]{40,}$/.test(v) && !v.includes(' ')) return { id: 'cf_token', ok: true, label: 'Cloudflare API token (likely)' };
+  if (/^[A-Za-z0-9_\-]{40,}$/.test(v) && !v.includes(' ')) return { id: 'cf_token', ok: true, label: 'Cloudflare API token (likely)' };
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return { id: 'liveavatar', ok: true, label: 'LiveAvatar / UUID key' };
   if (v.length >= 20) return { id: 'liveavatar', ok: true, label: 'LiveAvatar / generic API key' };
   return { id: null, ok: false, label: 'Unknown format' };
@@ -1124,7 +1163,7 @@ function saveSettings() {
 async function checkWorkerEnv() {
   const box = document.getElementById('env-check-result');
   if (box) { box.classList.remove('hidden'); box.textContent = 'Checking Worker…'; }
-  const base = WORKER_BASE.replace(/\\/$/, '');
+  const base = WORKER_BASE.replace(/\/$/, '');
   const lines = [];
   const browser = [
     ['Gemini (browser)', !!state.geminiKey, state.geminiKey ? recogniseSecret(state.geminiKey).label : 'missing'],
@@ -1169,7 +1208,7 @@ async function checkWorkerEnv() {
   } catch (e) {
     lines.push('Worker check failed: ' + (e.message || e));
   }
-  if (box) box.textContent = lines.join('\\n');
+  if (box) box.textContent = lines.join('\n');
   addMia(lines.filter(l => l.startsWith('✗')).length ? 'Some keys are missing. Open the gear and paste them.' : 'Secrets look present in the browser. Worker keys still need Cloudflare Variables if ✗.');
 }
 function updateGeminiStatus() {
@@ -1205,13 +1244,13 @@ function initChecklist() {
 function renderChecklist() {
   const box = document.getElementById('checklist-items');
   if (!box) return;
-  box.innerHTML = state.checklist.items.map(item => \`
+  box.innerHTML = state.checklist.items.map(item => `
     <label class="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/8 cursor-pointer">
-      <input type="checkbox" \${item.done?'checked':''} onchange="toggleCheck(\${item.id})" class="rounded border-white/20">
-      <span class="text-sm \${item.done?'line-through text-slate-500':''}">\${item.text}</span>
-    </label>\`).join('');
+      <input type="checkbox" ${item.done?'checked':''} onchange="toggleCheck(${item.id})" class="rounded border-white/20">
+      <span class="text-sm ${item.done?'line-through text-slate-500':''}">${item.text}</span>
+    </label>`).join('');
   const done = state.checklist.items.filter(i => i.done).length;
-  document.getElementById('checklist-progress').textContent = \`\${done} / \${state.checklist.items.length} complete\`;
+  document.getElementById('checklist-progress').textContent = `${done} / ${state.checklist.items.length} complete`;
 }
 function toggleCheck(id) {
   const item = state.checklist.items.find(i => i.id === id);
@@ -1243,11 +1282,11 @@ function renderTraining() {
     log.innerHTML = '<div class="text-slate-500">No training notes yet. Add your first note above.</div>';
     return;
   }
-  log.innerHTML = state.trainingNotes.map((n, i) => \`
+  log.innerHTML = state.trainingNotes.map((n, i) => `
     <div class="p-3 rounded-xl bg-white/5 flex justify-between gap-2">
-      <div><div class="text-[10px] text-slate-500 mb-0.5">\${n.date}</div>\${escapeHtml(n.text)}</div>
-      <button onclick="removeTraining(\${i})" class="text-slate-500 hover:text-red-400 text-xs shrink-0">✕</button>
-    </div>\`).join('');
+      <div><div class="text-[10px] text-slate-500 mb-0.5">${n.date}</div>${escapeHtml(n.text)}</div>
+      <button onclick="removeTraining(${i})" class="text-slate-500 hover:text-red-400 text-xs shrink-0">✕</button>
+    </div>`).join('');
 }
 function saveTraining() {
   const input = document.getElementById('training-input');
@@ -1287,7 +1326,7 @@ async function handleFiles(list) {
   if (!list || list.length === 0) return;
   const statusEl = document.getElementById('upload-status');
   statusEl.classList.remove('hidden');
-  statusEl.textContent = \`Uploading \${list.length} file(s)…\`;
+  statusEl.textContent = `Uploading ${list.length} file(s)…`;
   statusEl.className = 'text-[10px] text-center text-pink-400';
 
   let done = 0;
@@ -1300,11 +1339,11 @@ async function handleFiles(list) {
       fileObj: file, status: 'uploaded'
     };
     state.files.push(entry);
-    addMia(\`Received “\${file.name}” (\${(file.size/1024).toFixed(1)} KB). Auto-tagged → \${catName(cat)}.\`);
+    addMia(`Received “${file.name}” (${(file.size/1024).toFixed(1)} KB). Auto-tagged → ${catName(cat)}.`);
 
     // Upload to R2 cloud vault + route
     try {
-      const up = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/files', {
+      const up = await fetch(WORKER_BASE.replace(/\/$/, '') + '/files', {
         method: 'POST',
         headers: {
           'Content-Type': file.type || 'application/octet-stream',
@@ -1317,22 +1356,22 @@ async function handleFiles(list) {
         const data = await up.json();
         entry.key = data.key;
         saveCatOverride(data.key, cat);
-        entry.cloudUrl = WORKER_BASE.replace(/\\/$/, '') + '/files?key=' + encodeURIComponent(data.key);
+        entry.cloudUrl = WORKER_BASE.replace(/\/$/, '') + '/files?key=' + encodeURIComponent(data.key);
         entry.url = entry.cloudUrl;
-        addMia(\`Cloud saved: “\${file.name}” → R2\`);
-        if (/\\.html$/i.test(file.name) || cat === 'upgrade') {
+        addMia(`Cloud saved: “${file.name}” → R2`);
+        if (/\.html$/i.test(file.name) || cat === 'upgrade') {
           entry._offerUpgrade = true;
           addMia('HTML uploaded. Shell: upgrade work ' + (entry.key || '') + '  — or say “activate upgrade”.');
         }
       } else {
         const err = await up.json().catch(() => ({}));
-        addMia(\`R2 upload issue: \${err.error || up.status}. Kept local copy.\`);
+        addMia(`R2 upload issue: ${err.error || up.status}. Kept local copy.`);
       }
     } catch (err) {
-      addMia(\`Local only for “\${file.name}” (cloud unreachable).\`);
+      addMia(`Local only for “${file.name}” (cloud unreachable).`);
     }
     try {
-      const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/route', {
+      const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/route', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileName: file.name, fileType: file.type, category: cat })
@@ -1340,14 +1379,14 @@ async function handleFiles(list) {
       if (res.ok) {
         const data = await res.json();
         entry.routedTo = data.destination;
-        addMia(\`Route: \${data.destination} — \${data.reason}\`);
+        addMia(`Route: ${data.destination} — ${data.reason}`);
       }
     } catch (err) {}
     done++;
-    statusEl.textContent = \`Processed \${done}/\${list.length}\`;
+    statusEl.textContent = `Processed ${done}/${list.length}`;
   }
 
-  statusEl.textContent = \`✓ \${list.length} file(s) uploaded & ready in File Vault\`;
+  statusEl.textContent = `✓ ${list.length} file(s) uploaded & ready in File Vault`;
   statusEl.className = 'text-[10px] text-center text-emerald-400';
   setTimeout(() => statusEl.classList.add('hidden'), 4000);
 
@@ -1388,7 +1427,7 @@ function guessCatFromCloud(name, type) {
   const n = String(name || '');
   const c = guessCat(n, type || '');
   if (c !== 'unsorted') return c;
-  if (/screenshot|screen shot|photo|selfie|thumbnail|\\.(png|jpe?g|webp|gif|heic|bmp|svg|mp4|mov|webm|m4v|mp3|wav|m4a)$/i.test(n)) return 'lensflow';
+  if (/screenshot|screen shot|photo|selfie|thumbnail|\.(png|jpe?g|webp|gif|heic|bmp|svg|mp4|mov|webm|m4v|mp3|wav|m4a)$/i.test(n)) return 'lensflow';
   const t = String(type || '').toLowerCase();
   if (t.indexOf('image/') === 0 || t.indexOf('video/') === 0 || t.indexOf('audio/') === 0) return 'lensflow';
   if (t.indexOf('text/') === 0 || t.indexOf('json') > -1 || t.indexOf('javascript') > -1 || t.indexOf('xml') > -1) return 'code';
@@ -1399,10 +1438,10 @@ function catName(id) { return CATS.find(c => c.id === id)?.name || id; }
 
 function renderCats() {
   const list = document.getElementById('cat-list');
-  list.innerHTML = \`<button onclick="setCat('all')" class="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-white/5 \${state.currentCat==='all'?'bg-pink-500/15 text-pink-300':''}">📁 All (\${state.files.length})</button>\` +
+  list.innerHTML = `<button onclick="setCat('all')" class="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-white/5 ${state.currentCat==='all'?'bg-pink-500/15 text-pink-300':''}">📁 All (${state.files.length})</button>` +
     CATS.map(c => {
       const cnt = state.files.filter(f => f.category === c.id).length;
-      return \`<button onclick="setCat('\${c.id}')" class="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-white/5 \${state.currentCat===c.id?'bg-pink-500/15 text-pink-300':''}">\${c.icon} \${c.name} <span class="opacity-50">\${cnt}</span></button>\`;
+      return `<button onclick="setCat('${c.id}')" class="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-white/5 ${state.currentCat===c.id?'bg-pink-500/15 text-pink-300':''}">${c.icon} ${c.name} <span class="opacity-50">${cnt}</span></button>`;
     }).join('');
 }
 
@@ -1427,18 +1466,18 @@ function renderFiles() {
     const isAud = (f.type || '').startsWith('audio/');
     const isCode = isCodeFile(f);
     let thumb;
-    if (isImg) thumb = \`<img src="\${f.url}" class="w-full h-full object-cover">\`;
+    if (isImg) thumb = `<img src="${f.url}" class="w-full h-full object-cover">`;
     else if (isVid) thumb = '<span class="text-xl">🎥</span>';
     else if (isAud) thumb = '<span class="text-xl">🎵</span>';
-    else if (isCode) thumb = \`<span class="text-2xl">\${codeIcon(f.name)}</span>\`;
+    else if (isCode) thumb = `<span class="text-2xl">${codeIcon(f.name)}</span>`;
     else thumb = '<span class="text-xl">📎</span>';
-    return \`<div onclick="selectFile('\${f.id}')" class="glass-light rounded-xl p-2.5 cursor-pointer border transition \${state.selectedId===f.id?'border-pink-500/60 bg-pink-500/10':'border-transparent'}">
+    return `<div onclick="selectFile('${f.id}')" class="glass-light rounded-xl p-2.5 cursor-pointer border transition ${state.selectedId===f.id?'border-pink-500/60 bg-pink-500/10':'border-transparent'}">
       <div class="aspect-square rounded-lg bg-black/40 flex items-center justify-center mb-1.5 overflow-hidden">
-        \${thumb}
+        ${thumb}
       </div>
-      <div class="text-[10px] font-medium truncate">\${escapeHtml(f.name)}</div>
-      <div class="text-[9px] text-slate-500">\${isCode ? langLabel(f.name) + ' · ' : ''}\${catName(f.category)}\${f.routedTo?' → '+f.routedTo:''}</div>
-    </div>\`;
+      <div class="text-[10px] font-medium truncate">${escapeHtml(f.name)}</div>
+      <div class="text-[9px] text-slate-500">${isCode ? langLabel(f.name) + ' · ' : ''}${catName(f.category)}${f.routedTo?' → '+f.routedTo:''}</div>
+    </div>`;
   }).join('');
 }
 
@@ -1451,17 +1490,17 @@ async function selectFile(id) {
   const meta = document.getElementById('prev-meta');
   meta.classList.remove('hidden');
   const lang = isCodeFile(f) ? langLabel(f.name) : '';
-  meta.innerHTML = \`<div>Name: \${escapeHtml(f.name)}</div><div>Type: \${escapeHtml(f.type || 'unknown')}\${lang ? ' · <span class="text-indigo-300">' + lang + '</span>' : ''}</div><div>Size: \${(f.size/1024).toFixed(1)} KB</div><div>Category: <span class="text-pink-400">\${catName(f.category)}</span></div>\${f.routedTo?\`<div>Routed: <span class="text-emerald-400">\${f.routedTo}</span></div>\`:''}\${f.key?\`<div class="truncate">R2: \${escapeHtml(f.key)}</div>\`:''}\`;
+  meta.innerHTML = `<div>Name: ${escapeHtml(f.name)}</div><div>Type: ${escapeHtml(f.type || 'unknown')}${lang ? ' · <span class="text-indigo-300">' + lang + '</span>' : ''}</div><div>Size: ${(f.size/1024).toFixed(1)} KB</div><div>Category: <span class="text-pink-400">${catName(f.category)}</span></div>${f.routedTo?`<div>Routed: <span class="text-emerald-400">${f.routedTo}</span></div>`:''}${f.key?`<div class="truncate">R2: ${escapeHtml(f.key)}</div>`:''}`;
   const frame = document.getElementById('preview-frame') || area.querySelector('div') || area;
   const t = f.type || '';
   if (t.startsWith('image/')) {
-    frame.innerHTML = \`<img src="\${f.url}" class="w-full h-full object-contain rounded-xl">\`;
+    frame.innerHTML = `<img src="${f.url}" class="w-full h-full object-contain rounded-xl">`;
   } else if (t.startsWith('video/')) {
-    frame.innerHTML = \`<video src="\${f.url}" class="w-full h-full object-contain" controls></video>\`;
+    frame.innerHTML = `<video src="${f.url}" class="w-full h-full object-contain" controls></video>`;
   } else if (t.startsWith('audio/')) {
-    frame.innerHTML = \`<div class="w-full text-center space-y-3"><div class="text-4xl">🎵</div><audio src="\${f.url}" class="w-full" controls></audio><div class="text-[10px] text-slate-400">\${escapeHtml(f.name)}</div></div>\`;
+    frame.innerHTML = `<div class="w-full text-center space-y-3"><div class="text-4xl">🎵</div><audio src="${f.url}" class="w-full" controls></audio><div class="text-[10px] text-slate-400">${escapeHtml(f.name)}</div></div>`;
   } else if (isCodeFile(f) || /.html?$/i.test(f.name)) {
-    frame.innerHTML = \`<div class="w-full h-full flex flex-col min-h-[200px]"><div class="flex items-center justify-between mb-2 shrink-0"><span class="text-[10px] font-bold text-indigo-300">\${codeIcon(f.name)} \${lang || 'Text'}</span><div class="flex gap-1"><button type="button" onclick="copyPreviewText()" class="px-2 py-0.5 rounded bg-white/10 text-[9px] font-bold">Copy</button><a href="\${f.url}" download="\${escapeHtml(f.name)}" class="px-2 py-0.5 rounded bg-white/10 text-[9px] font-bold no-underline text-white">Download</a></div></div><pre id="code-preview" class="flex-1 overflow-auto bg-black/50 border border-white/10 rounded-xl p-3 text-[11px] font-mono text-emerald-200/90 whitespace-pre-wrap break-words max-h-[55vh]">Loading…</pre></div>\`;
+    frame.innerHTML = `<div class="w-full h-full flex flex-col min-h-[200px]"><div class="flex items-center justify-between mb-2 shrink-0"><span class="text-[10px] font-bold text-indigo-300">${codeIcon(f.name)} ${lang || 'Text'}</span><div class="flex gap-1"><button type="button" onclick="copyPreviewText()" class="px-2 py-0.5 rounded bg-white/10 text-[9px] font-bold">Copy</button><a href="${f.url}" download="${escapeHtml(f.name)}" class="px-2 py-0.5 rounded bg-white/10 text-[9px] font-bold no-underline text-white">Download</a></div></div><pre id="code-preview" class="flex-1 overflow-auto bg-black/50 border border-white/10 rounded-xl p-3 text-[11px] font-mono text-emerald-200/90 whitespace-pre-wrap break-words max-h-[55vh]">Loading…</pre></div>`;
     try {
       let text = '';
       if (f.fileObj) {
@@ -1471,7 +1510,7 @@ async function selectFile(id) {
         text = await res.text();
       }
       const max = 400000;
-      if (text.length > max) text = text.slice(0, max) + '\\n\\n… truncated (' + text.length + ' chars total)';
+      if (text.length > max) text = text.slice(0, max) + '\n\n… truncated (' + text.length + ' chars total)';
       const pre = document.getElementById('code-preview');
       if (pre) {
         pre.textContent = text || '(empty file)';
@@ -1482,9 +1521,9 @@ async function selectFile(id) {
       if (pre) pre.textContent = 'Could not open file: ' + (err.message || err);
     }
   } else if (t === 'application/pdf' || /.pdf$/i.test(f.name)) {
-    frame.innerHTML = \`<div class="w-full h-full flex flex-col gap-2"><iframe src="\${f.url}" class="w-full flex-1 min-h-[240px] rounded-xl border border-white/10 bg-white"></iframe><a href="\${f.url}" target="_blank" class="text-center text-[10px] text-pink-300">Open PDF in new tab</a></div>\`;
+    frame.innerHTML = `<div class="w-full h-full flex flex-col gap-2"><iframe src="${f.url}" class="w-full flex-1 min-h-[240px] rounded-xl border border-white/10 bg-white"></iframe><a href="${f.url}" target="_blank" class="text-center text-[10px] text-pink-300">Open PDF in new tab</a></div>`;
   } else {
-    frame.innerHTML = \`<div class="text-slate-400 text-xs text-center space-y-2"><div class="text-3xl mb-1">📎</div><div class="font-medium text-white">\${escapeHtml(f.name)}</div><div>\${(f.size/1024).toFixed(1)} KB · \${escapeHtml(t || 'binary')}</div><a href="\${f.url}" download="\${escapeHtml(f.name)}" class="inline-block mt-2 px-3 py-1.5 rounded-lg bg-pink-600/80 text-white text-[10px] font-bold no-underline">Download</a><a href="\${f.url}" target="_blank" class="inline-block mt-1 text-[10px] text-pink-300">Open in new tab</a></div>\`;
+    frame.innerHTML = `<div class="text-slate-400 text-xs text-center space-y-2"><div class="text-3xl mb-1">📎</div><div class="font-medium text-white">${escapeHtml(f.name)}</div><div>${(f.size/1024).toFixed(1)} KB · ${escapeHtml(t || 'binary')}</div><a href="${f.url}" download="${escapeHtml(f.name)}" class="inline-block mt-2 px-3 py-1.5 rounded-lg bg-pink-600/80 text-white text-[10px] font-bold no-underline">Download</a><a href="${f.url}" target="_blank" class="inline-block mt-1 text-[10px] text-pink-300">Open in new tab</a></div>`;
   }
   document.getElementById('btn-deploy').disabled = false;
   document.getElementById('btn-route').disabled = false;
@@ -1499,7 +1538,7 @@ function deploySelected() {
   const f = state.files.find(x => x.id === state.selectedId);
   if (!f) return;
   if (!state.deployQueue.find(d => d.id === f.id)) state.deployQueue.push({ ...f, status: 'queued' });
-  addMia(\`“\${f.name}” added to deployment queue for \${PUBLIC_DOMAIN}.\`);
+  addMia(`“${f.name}” added to deployment queue for ${PUBLIC_DOMAIN}.`);
   renderDeploy();
   switchTool('deploy');
 }
@@ -1507,7 +1546,7 @@ function deploySelected() {
 async function routeSelected() {
   const f = state.files.find(x => x.id === state.selectedId);
   if (!f) return;
-  addMia(\`Re-routing “\${f.name}”…\`);
+  addMia(`Re-routing “${f.name}”…`);
   try {
     const res = await fetch(WORKER_BASE + '/route', {
       method: 'POST',
@@ -1518,7 +1557,7 @@ async function routeSelected() {
     f.routedTo = data.destination;
     const mapped = CATS.find(c => c.id === String(data.destination || '').toLowerCase());
     if (mapped) { f.category = mapped.id; saveCatOverride(f.key, mapped.id); renderCats(); renderFiles(); }
-    addMia(\`New route: \${data.destination} — \${data.reason}\`);
+    addMia(`New route: ${data.destination} — ${data.reason}`);
     selectFile(f.id);
   } catch {
     addMia('Could not reach Worker. Check WORKER_BASE URL.');
@@ -1534,12 +1573,12 @@ function renderDeploy() {
   list.innerHTML = state.deployQueue.map((d,i) => {
     const st = d.status || 'queued';
     const color = st === 'live' ? 'text-emerald-400' : st === 'failed' ? 'text-rose-400' : st === 'deploying' ? 'text-amber-300' : 'text-slate-400';
-    return \`
+    return `
     <div class="glass rounded-xl p-4 border border-white/10 flex items-center justify-between gap-3">
-      <div class="min-w-0"><div class="text-sm font-medium truncate">\${escapeHtml(d.name)}</div>
-        <div class="text-[10px] \${color}">\${catName(d.category)} • \${escapeHtml(st)}\${d.error ? ' — ' + escapeHtml(d.error) : ''}\${d.url ? ' — ' + escapeHtml(d.url) : ''}</div></div>
-      <button onclick="doDeploy(\${i})" \${st==='deploying'?'disabled':''} class="px-3 py-1.5 rounded-lg bg-emerald-600 text-xs font-bold disabled:opacity-40">\${st==='live'?'Redeploy':'Deploy Now'}</button>
-    </div>\`;
+      <div class="min-w-0"><div class="text-sm font-medium truncate">${escapeHtml(d.name)}</div>
+        <div class="text-[10px] ${color}">${catName(d.category)} • ${escapeHtml(st)}${d.error ? ' — ' + escapeHtml(d.error) : ''}${d.url ? ' — ' + escapeHtml(d.url) : ''}</div></div>
+      <button onclick="doDeploy(${i})" ${st==='deploying'?'disabled':''} class="px-3 py-1.5 rounded-lg bg-emerald-600 text-xs font-bold disabled:opacity-40">${st==='live'?'Redeploy':'Deploy Now'}</button>
+    </div>`;
   }).join('');
 }
 
@@ -1581,7 +1620,7 @@ function showDeployPending(name) {
 
 async function logDeploy(rec) {
   try {
-    await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/deploy', {
+    await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/deploy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action: 'log' }, rec))
@@ -1595,7 +1634,7 @@ async function loadLastDeploy() {
     if (raw) showDeployResult(JSON.parse(raw));
   } catch (e) {}
   try {
-    const data = await (await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/deploy')).json();
+    const data = await (await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/deploy')).json();
     if (data && data.last) showDeployResult(data.last);
   } catch (e) {}
 }
@@ -1607,8 +1646,8 @@ async function doDeploy(i) {
   d.error = '';
   renderDeploy();
   showDeployPending(d.name);
-  const base = WORKER_BASE.replace(/\\/$/, '');
-  const isHtml = /\\.html?$/i.test(d.name || d.key || '');
+  const base = WORKER_BASE.replace(/\/$/, '');
+  const isHtml = /\.html?$/i.test(d.name || d.key || '');
   const target = /play/i.test(d.name || '') ? 'play' : 'work';
   const finish = (rec) => {
     d.status = rec.ok ? 'live' : 'failed';
@@ -1672,10 +1711,10 @@ function localDesignHtml(opts) {
   const title = (opts.name || 'Studio').slice(0, 80);
   const line = (opts.tagline || opts.brief || 'Designed by Mia.').slice(0, 240);
   const pal = { ink:['#07060a','#f8fafc','#ec4899'], light:['#f6f1e8','#16141c','#9a3412'], ocean:['#04151c','#e8fbff','#22d3ee'], gold:['#0c0a07','#f8f1de','#eab308'], forest:['#08110c','#ecfdf3','#34d399'] }[opts.style || 'ink'] || ['#07060a','#f8fafc','#ec4899'];
-  const esc = (s) => String(s||'').replace(/[&<>]/g, (c) => ({ '&': '\\u0026amp;', '<': '\\u0026lt;', '>': '\\u0026gt;' }[c]));
-  return \`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>\${esc(title)}</title>
-<style>body{margin:0;background:\${pal[0]};color:\${pal[1]};font-family:system-ui;padding:48px 28px}h1{font-size:64px;letter-spacing:-.04em;max-width:16ch}p{color:#94a3b8;font-size:20px;max-width:52ch}.btn{display:inline-block;margin-top:24px;background:\${pal[2]};color:#fff;padding:12px 18px;border-radius:999px;font-weight:700;text-decoration:none}.k{color:\${pal[2]};letter-spacing:.16em;text-transform:uppercase;font-size:12px;font-weight:700}</style></head>
-<body><div class="k">\${esc(opts.industry || 'studio')}</div><h1>\${esc(title)}</h1><p>\${esc(line)}</p><a class="btn" href="#contact">Start</a></body></html>\`;
+  const esc = (s) => String(s||'').replace(/[&<>]/g, (c) => ({ '&': '\u0026amp;', '<': '\u0026lt;', '>': '\u0026gt;' }[c]));
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
+<style>body{margin:0;background:${pal[0]};color:${pal[1]};font-family:system-ui;padding:48px 28px}h1{font-size:64px;letter-spacing:-.04em;max-width:16ch}p{color:#94a3b8;font-size:20px;max-width:52ch}.btn{display:inline-block;margin-top:24px;background:${pal[2]};color:#fff;padding:12px 18px;border-radius:999px;font-weight:700;text-decoration:none}.k{color:${pal[2]};letter-spacing:.16em;text-transform:uppercase;font-size:12px;font-weight:700}</style></head>
+<body><div class="k">${esc(opts.industry || 'studio')}</div><h1>${esc(title)}</h1><p>${esc(line)}</p><a class="btn" href="#contact">Start</a></body></html>`;
 }
 async function designWebsite(publish) {
   const name = (document.getElementById('site-name') || {}).value || 'Studio';
@@ -1688,7 +1727,7 @@ async function designWebsite(publish) {
   const payload = { name, brief, tagline: brief, style, industry };
   let rec = null;
   try {
-    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/design', {
+    const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/design', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     });
     const ct = res.headers.get('content-type') || '';
@@ -1701,7 +1740,7 @@ async function designWebsite(publish) {
   if (frame) frame.src = url;
   state.files.push({
     id: 'site-' + Date.now(),
-    name: name.replace(/\\s+/g, '-').toLowerCase() + '.html',
+    name: name.replace(/\s+/g, '-').toLowerCase() + '.html',
     type: 'text/html',
     size: html.length,
     category: 'code',
@@ -1724,7 +1763,7 @@ async function renderPublishedSites() {
   const el = document.getElementById('site-list');
   if (!el) return;
   try {
-    const data = await (await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/sites')).json();
+    const data = await (await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/sites')).json();
     const sites = data.sites || [];
     el.innerHTML = sites.length
       ? sites.map((s) => '<div><a class="text-pink-300 underline" href="' + (s.url || '#') + '" target="_blank">' + (s.slug || s.url) + '</a> · ' + (s.files || 0) + ' files</div>').join('')
@@ -1751,11 +1790,11 @@ function runGlobalSearch(q) {
   if (!hits.length) {
     box.innerHTML = '<div class="p-3 text-xs text-slate-500">No matches</div>';
   } else {
-    box.innerHTML = hits.slice(0,12).map(h => \`
-      <div class="px-3 py-2 hover:bg-white/5 cursor-pointer text-xs border-b border-white/5 last:border-0" onclick="searchGo('\${h.type}','\${h.id||''}')">
-        <div class="font-medium">\${h.label}</div>
-        <div class="text-[10px] text-slate-500">\${h.sub}</div>
-      </div>\`).join('');
+    box.innerHTML = hits.slice(0,12).map(h => `
+      <div class="px-3 py-2 hover:bg-white/5 cursor-pointer text-xs border-b border-white/5 last:border-0" onclick="searchGo('${h.type}','${h.id||''}')">
+        <div class="font-medium">${h.label}</div>
+        <div class="text-[10px] text-slate-500">${h.sub}</div>
+      </div>`).join('');
   }
   box.classList.remove('hidden');
 }
@@ -1774,16 +1813,16 @@ function doFindReplace(execute) {
   const log = document.getElementById('repl-log');
   log.innerHTML = '';
   state.contentStore.forEach(item => {
-    const regex = new RegExp(find.replace(/[.*+?^\${}()|[\\]\\\\]/g,'\\\\$&'), 'gi');
+    const regex = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi');
     const matches = item.content.match(regex);
     if (matches) {
       total += matches.length;
       if (execute) item.content = item.content.replace(regex, repl);
-      log.innerHTML += \`<div class="p-2 rounded bg-white/5">\${item.name}: \${matches.length} match(es)</div>\`;
+      log.innerHTML += `<div class="p-2 rounded bg-white/5">${item.name}: ${matches.length} match(es)</div>`;
     }
   });
-  log.innerHTML += \`<div class="mt-2 font-bold text-emerald-400">\${execute ? 'Replaced' : 'Found'} \${total} occurrence(s)</div>\`;
-  if (execute) addMia(\`Find & Replace completed — \${total} replacements across content store.\`);
+  log.innerHTML += `<div class="mt-2 font-bold text-emerald-400">${execute ? 'Replaced' : 'Found'} ${total} occurrence(s)</div>`;
+  if (execute) addMia(`Find & Replace completed — ${total} replacements across content store.`);
 }
 
 // ========== CAPCUT EDITOR ==========
@@ -1870,7 +1909,7 @@ async function startLiveSession(companion) {
   const status = document.getElementById('studio-status');
   status.textContent = 'Creating ' + companion + ' session…';
   try {
-    const base = WORKER_BASE.replace(/\\/$/, '');
+    const base = WORKER_BASE.replace(/\/$/, '');
     const res = await fetch(base + '/session?companion=' + encodeURIComponent(companion));
     if (!res.ok) throw new Error('session failed');
     const data = await res.json();
@@ -1964,11 +2003,11 @@ function scanDuplicates() {
   }
   const extra = dups.reduce((n, g) => n + g.files.length - 1, 0);
   sum.textContent = dups.length + ' duplicate group(s), ' + extra + ' extra file(s) can be removed.';
-  list.innerHTML = dups.map(g => \`
+  list.innerHTML = dups.map(g => `
     <div class="p-3 rounded-xl bg-white/5 border border-white/10">
-      <div class="font-medium text-pink-300 mb-1">\${g.files[0].name} · \${g.files[0].size} bytes · ×\${g.files.length}</div>
-      <div class="text-slate-500">\${g.files.map(f => f.id).join(', ')}</div>
-    </div>\`).join('');
+      <div class="font-medium text-pink-300 mb-1">${g.files[0].name} · ${g.files[0].size} bytes · ×${g.files.length}</div>
+      <div class="text-slate-500">${g.files.map(f => f.id).join(', ')}</div>
+    </div>`).join('');
   addMia('Found ' + dups.length + ' duplicate group(s). Review Dedupe tab, then Remove or Download clean pack.');
 }
 function removeDuplicates() {
@@ -2036,7 +2075,7 @@ async function downloadCleanPack() {
 
 // ========== API PANEL ==========
 function apiPreset(name) {
-  const base = (typeof WORKER_BASE !== 'undefined' ? WORKER_BASE : '').replace(/\\/$/, '');
+  const base = (typeof WORKER_BASE !== 'undefined' ? WORKER_BASE : '').replace(/\/$/, '');
   document.getElementById('api-headers').value = JSON.stringify({ 'Content-Type': 'application/json' }, null, 0);
   if (name === 'health') {
     document.getElementById('api-method').value = 'GET';
@@ -2176,7 +2215,7 @@ async function speakMiaText(text) {
   if (!text || !state.autoVoice) return;
   if (!WORKER_BASE) return;
   try {
-    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/tts', {
+    const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: text.slice(0, 500), companion: 'mia' }),
@@ -2197,7 +2236,7 @@ async function speakMiaText(text) {
 
 function showPhoneLink() {
   const url = window.location.href.split('?')[0];
-  addMia('On your phone, open this same address in the browser:\\n' + url + '\\n\\nSame tools. Vault files stay on each device until cloud vault is added — use Download clean pack, then open the zip on your phone, or upload from the phone camera/files into the vault here.');
+  addMia('On your phone, open this same address in the browser:\n' + url + '\n\nSame tools. Vault files stay on each device until cloud vault is added — use Download clean pack, then open the zip on your phone, or upload from the phone camera/files into the vault here.');
   if (navigator.share) {
     navigator.share({ title: 'HeyMia', url }).catch(() => {});
   } else {
@@ -2254,7 +2293,7 @@ function showPhoneLink() {
 async function loadCloudVault() {
   if (!WORKER_BASE) return;
   try {
-    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/files');
+    const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/files');
     if (!res.ok) return;
     const data = await res.json();
     if (!data.files || !data.files.length) return;
@@ -2272,7 +2311,7 @@ async function loadCloudVault() {
         type: ctype,
         size: o.size || 0,
         category: cat,
-        url: WORKER_BASE.replace(/\\/$/, '') + '/files?key=' + encodeURIComponent(o.key),
+        url: WORKER_BASE.replace(/\/$/, '') + '/files?key=' + encodeURIComponent(o.key),
         status: 'cloud',
       });
     });
@@ -2287,7 +2326,7 @@ async function loadCloudVault() {
 function shellPrint(line) {
   const out = document.getElementById('shell-out');
   if (!out) return;
-  out.textContent += line + '\\n';
+  out.textContent += line + '\n';
   out.scrollTop = out.scrollHeight;
 }
 function runShell(e) {
@@ -2297,7 +2336,7 @@ function runShell(e) {
   input.value = '';
   if (!raw) return;
   shellPrint('heymia> ' + raw);
-  const parts = raw.split(/\\s+/);
+  const parts = raw.split(/\s+/);
   const cmd = parts[0].toLowerCase();
   const arg = parts.slice(1).join(' ');
   if (cmd === 'help') {
@@ -2340,15 +2379,15 @@ function runShell(e) {
     shellPrint('Work / File Vault');
   } else if (cmd === 'api' && arg === 'health') {
     shellPrint('GET ' + WORKER_BASE + '/');
-    fetch(WORKER_BASE.replace(/\\/$/, '') + '/').then(r => r.json()).then(d => {
+    fetch(WORKER_BASE.replace(/\/$/, '') + '/').then(r => r.json()).then(d => {
       shellPrint(JSON.stringify(d, null, 2));
     }).catch(err => shellPrint('Error: ' + err.message));
   } else if (cmd === 'persona') {
-    const bits = arg.split(/\\s+/);
+    const bits = arg.split(/\s+/);
     if (bits[0] === 'install') installPersonalityFromVideo();
     else if (bits[0] === 'video' && bits[1]) {
       const key = bits[1];
-      const url = WORKER_BASE.replace(/\\/$/, '') + '/files?key=' + encodeURIComponent(key);
+      const url = WORKER_BASE.replace(/\/$/, '') + '/files?key=' + encodeURIComponent(key);
       setPersonalityVideoUrl(url);
       shellPrint('Persona video URL set to ' + url);
     } else {
@@ -2357,9 +2396,9 @@ function runShell(e) {
   } else if (cmd === 'ui' && arg === 'status') {
     uiStatus();
   } else if (cmd === 'upgrade') {
-    const bits = arg.split(/\\s+/);
+    const bits = arg.split(/\s+/);
     if (!arg || bits[0] === 'list') {
-      const ups = state.files.filter(f => /upgrade|\\.html$/i.test(f.name || '') || (f.key || '').includes('ui/'));
+      const ups = state.files.filter(f => /upgrade|\.html$/i.test(f.name || '') || (f.key || '').includes('ui/'));
       shellPrint('Upgrade candidates: ' + ups.length);
       ups.forEach(f => shellPrint('  ' + (f.key || f.id) + ' · ' + f.name));
     } else if (bits[0] === 'reset') {
@@ -2404,11 +2443,11 @@ async function listGithubRepos(fromShell) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || res.status);
     const box = document.getElementById('gh-repos');
-    box.innerHTML = data.map(r => \`
-      <a class="block p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5" href="\${r.html_url}" target="_blank" rel="noopener">
-        <div class="font-medium">\${r.full_name}</div>
-        <div class="text-slate-500 text-[10px]">\${r.private ? 'private' : 'public'} · \${r.language || '—'} · updated \${new Date(r.updated_at).toLocaleDateString()}</div>
-      </a>\`).join('');
+    box.innerHTML = data.map(r => `
+      <a class="block p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5" href="${r.html_url}" target="_blank" rel="noopener">
+        <div class="font-medium">${r.full_name}</div>
+        <div class="text-slate-500 text-[10px]">${r.private ? 'private' : 'public'} · ${r.language || '—'} · updated ${new Date(r.updated_at).toLocaleDateString()}</div>
+      </a>`).join('');
     document.getElementById('gh-status').textContent = data.length + ' repos';
     if (fromShell) {
       shellPrint(data.length + ' repos:');
@@ -2427,6 +2466,7 @@ const MIA_MODES = {
   plain: 'Mode PLAIN: clear, direct, no fluff, not rude. Short practical answers.',
   soft: 'Mode SOFT: warm, conversational, patient. You may use a gentle line of small talk. Still helpful.',
   build: 'Mode BUILD: technical and structured. Prefer steps, checklists, file names, commands. No emotional filler.',
+  grok: 'Mode GROK: xAI Grok-4.5 troubleshoots the Worker, vault, deploy, DNS, and this UI. Short numbered fixes.',
 };
 
 function setMiaMode(mode, silent) {
@@ -2462,11 +2502,11 @@ function renderKnowledge() {
     log.innerHTML = '<div class="text-slate-500">No knowledge entries yet.</div>';
     return;
   }
-  log.innerHTML = state.knowledge.map((n, i) => \`
+  log.innerHTML = state.knowledge.map((n, i) => `
     <div class="p-3 rounded-xl bg-white/5 flex justify-between gap-2">
-      <div><div class="text-[10px] text-slate-500 mb-0.5">\${n.date || ''}</div>\${escapeHtml(n.text)}</div>
-      <button onclick="removeKnowledge(\${i})" class="text-slate-500 hover:text-red-400 text-xs shrink-0">✕</button>
-    </div>\`).join('');
+      <div><div class="text-[10px] text-slate-500 mb-0.5">${n.date || ''}</div>${escapeHtml(n.text)}</div>
+      <button onclick="removeKnowledge(${i})" class="text-slate-500 hover:text-red-400 text-xs shrink-0">✕</button>
+    </div>`).join('');
 }
 
 function saveKnowledge() {
@@ -2492,17 +2532,17 @@ function buildMiaSystem() {
   const skillLine = skillsOn.length
     ? 'Active skills (prefer using these tools): ' + skillsOn.join(', ') + '.'
     : 'No special skills flagged.';
-  const know = (state.knowledge || []).slice(0, 12).map(k => '- ' + k.text).join('\\n');
-  const train = (state.trainingNotes || []).slice(0, 8).map(k => '- ' + k.text).join('\\n');
-  return \`You are Mia, ops agent for HeyMia (heymia.lensflow.au).
-\${mode}
-\${skillLine}
+  const know = (state.knowledge || []).slice(0, 12).map(k => '- ' + k.text).join('\n');
+  const train = (state.trainingNotes || []).slice(0, 8).map(k => '- ' + k.text).join('\n');
+  return `You are Mia, ops agent for HeyMia (heymia.lensflow.au).
+${mode}
+${skillLine}
 Knowledge base:
-\${know || '- (empty)'}
+${know || '- (empty)'}
 Training notes:
-\${train || '- (empty)'}
-Vault files right now: \${(state.files || []).length}.
-Keep answers useful. Do not invent secrets or payment facts.\`;
+${train || '- (empty)'}
+Vault files right now: ${(state.files || []).length}.
+Keep answers useful. Do not invent secrets or payment facts.`;
 }
 
 // init mode/skill UI after load
@@ -2531,7 +2571,7 @@ async function activateUpgrade(key, target) {
   }
   addMia('Activating UI upgrade (' + target + ')…');
   try {
-    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/ui/activate', {
+    const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/ui/activate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key, target }),
@@ -2548,7 +2588,7 @@ async function activateUpgrade(key, target) {
 }
 async function uiStatus() {
   try {
-    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/ui/status');
+    const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/ui/status');
     const data = await res.json();
     addMia('UI status: work=' + data.workActive + ' play=' + data.playActive);
     if (typeof shellPrint === 'function') shellPrint(JSON.stringify(data, null, 2));
@@ -2560,7 +2600,7 @@ async function uiStatus() {
 async function resetUpgrade(target) {
   target = target || 'work';
   try {
-    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/ui/reset', {
+    const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/ui/reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ target }),
@@ -2583,7 +2623,7 @@ state.jessTrainerPending = [];
 state.jessMetrics = JSON.parse(localStorage.getItem('heymia_jess_metrics') || '{}');
 state.jessQuoteDrill = JSON.parse(localStorage.getItem('heymia_jess_quote') || 'null');
 
-const JESS_TRAINER_SYSTEM = \`You are the Trainer AI for Jess (Fan Studio companion). You are NOT Jess and NOT Mia.
+const JESS_TRAINER_SYSTEM = `You are the Trainer AI for Jess (Fan Studio companion). You are NOT Jess and NOT Mia.
 Your only job is daily training for Jess: memory, emotional range, and high-intimacy performance.
 Focus areas:
 - Identity: Jess is bold, teasing, confident, fan-studio energy — separate from Mia
@@ -2592,7 +2632,7 @@ Focus areas:
 - Room awareness: Bedroom, Dungeon, Penthouse, Velvet Lounge
 - Memory: names, preferences, boundaries the owner records
 Output clear lines starting with RULE: or KNOW: for Jess.
-Short, practical. No casual companion chat.\`;
+Short, practical. No casual companion chat.`;
 
 const JESS_QUOTE_BANK = [
   'Come closer. Say it slower.',
@@ -2626,7 +2666,7 @@ function setTrainerCompanion(id) {
 state.trainerLog = JSON.parse(localStorage.getItem('heymia_trainer_log') || '[]');
 state.trainerPending = [];
 
-const TRAINER_SYSTEM = \`You are the Trainer AI for HeyMia. Your ONLY job is to help the owner train Mia every day.
+const TRAINER_SYSTEM = `You are the Trainer AI for HeyMia. Your ONLY job is to help the owner train Mia every day.
 You are not Mia. You are not a companion. You do not flirt.
 You:
 - Ask what should change about Mia today (tone, facts, boundaries, business rules, Mia vs Jess identity)
@@ -2634,7 +2674,7 @@ You:
 - Suggest a short daily drill (3 questions to test Mia later)
 - Keep replies structured and practical
 Format useful rules as lines starting with RULE: or KNOW:
-Owner trains Mia for Lensflow / Glimr. Mia is ops + companion identity; Jess is a separate companion.\`;
+Owner trains Mia for Lensflow / Glimr. Mia is ops + companion identity; Jess is a separate companion.`;
 
 function trainerBubble(who, text) {
   const box = document.getElementById('trainer-chat');
@@ -2642,7 +2682,7 @@ function trainerBubble(who, text) {
   const div = document.createElement('div');
   const isUser = who === 'You';
   div.className = (isUser ? 'msg-user ml-6' : 'msg-mia mr-6') + ' rounded-2xl p-3';
-  div.innerHTML = \`<div class="text-[10px] font-bold \${isUser ? 'text-pink-300' : 'text-purple-300'} mb-1">\${who}</div>\${escapeHtml(text)}\`;
+  div.innerHTML = `<div class="text-[10px] font-bold ${isUser ? 'text-pink-300' : 'text-purple-300'} mb-1">${who}</div>${escapeHtml(text)}`;
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
 }
@@ -2672,7 +2712,7 @@ function startDailyTrainingSession() {
         '4) Identity: keep Jess bold — never confuse with Mia.',
         '',
         'I will output RULE: and KNOW: for Jess. Press Save into Mia/Jess when ready.'
-      ].join('\\n'));
+      ].join('\n'));
     } else {
       trainerBubble('Trainer', [
         'Mia daily training session.',
@@ -2682,7 +2722,7 @@ function startDailyTrainingSession() {
         '3) Tone: Plain, Soft, or Build?',
         '',
         'I will turn your answers into RULE: and KNOW: lines. Press Save when ready.'
-      ].join('\\n'));
+      ].join('\n'));
     }
   }
 }
@@ -2701,11 +2741,11 @@ async function sendTrainer() {
   }
 
   let reply = null;
-  const prompt = (isJess ? JESS_TRAINER_SYSTEM : TRAINER_SYSTEM) + '\\n\\nOwner says:\\n' + text + '\\n\\nRespond as Trainer AI only.';
+  const prompt = (isJess ? JESS_TRAINER_SYSTEM : TRAINER_SYSTEM) + '\n\nOwner says:\n' + text + '\n\nRespond as Trainer AI only.';
 
   try {
     if (WORKER_BASE) {
-      const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/chat', {
+      const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2724,7 +2764,7 @@ async function sendTrainer() {
   if (!reply && state.geminiKey) {
     try {
       const res = await fetch(
-        \`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=\${state.geminiKey}\`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${state.geminiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2740,10 +2780,10 @@ async function sendTrainer() {
   }
 
   if (!reply) {
-    reply = 'Recorded. Add Gemini key for full Trainer replies.\\nSuggested:\\nKNOW: ' + text.slice(0, 200) + '\\nRULE: Apply this in future Mia replies.\\n\\nPress Save into Mia to store.';
+    reply = 'Recorded. Add Gemini key for full Trainer replies.\nSuggested:\nKNOW: ' + text.slice(0, 200) + '\nRULE: Apply this in future Mia replies.\n\nPress Save into Mia to store.';
     state.trainerPending.push('KNOW: ' + text.slice(0, 300));
   } else {
-    reply.split('\\n').forEach(line => {
+    reply.split('\n').forEach(line => {
       const s = line.trim();
       if (s.startsWith('RULE:') || s.startsWith('KNOW:')) state.trainerPending.push(s);
     });
@@ -2753,7 +2793,7 @@ async function sendTrainer() {
   if (state.trainerCompanion === 'jess') {
     state.jessTrainerLog.push({ role: 'trainer', text: reply, date: new Date().toISOString() });
     localStorage.setItem('heymia_jess_trainer_log', JSON.stringify(state.jessTrainerLog.slice(-100)));
-    (reply || '').split('\\n').forEach(line => {
+    (reply || '').split('\n').forEach(line => {
       const s = line.trim();
       if (s.startsWith('RULE:') || s.startsWith('KNOW:')) state.jessTrainerPending.push(s);
     });
@@ -2770,14 +2810,14 @@ function commitTrainerToMia() {
   const log = isJess ? state.jessTrainerLog : state.trainerLog;
   log.slice(-5).forEach(e => {
     if (e.role !== 'trainer') return;
-    (e.text || '').split('\\n').forEach(line => {
+    (e.text || '').split('\n').forEach(line => {
       const s = line.trim();
       if (s.startsWith('RULE:') || s.startsWith('KNOW:')) pending.push(s);
     });
   });
   const unique = [...new Set(pending)];
   unique.forEach(line => {
-    const body = line.replace(/^(RULE:|KNOW:)\\s*/i, '').trim();
+    const body = line.replace(/^(RULE:|KNOW:)\s*/i, '').trim();
     if (!body) return;
     if (isJess) {
       if (line.toUpperCase().startsWith('RULE')) {
@@ -2887,7 +2927,7 @@ function reportNarrative(scores, m) {
   else lines.push('1. One roleplay drill: “Who are you?” “Who is Jess?” “What is Glimr?”');
   lines.push('2. Run Trainer session and Save into Mia.');
   lines.push('3. One voice test if ElevenLabs is configured.');
-  return lines.join('\\n');
+  return lines.join('\n');
 }
 
 function generateDailyReport() {
@@ -2925,12 +2965,12 @@ function maybeAutoDailyReport() {
 
 // ========== TRIGGERS · REINFORCEMENT · QUOTE MEMORY ==========
 const BEHAVIOR_TRIGGERS = [
-  { id: 'fallback_loop', re: /I hear you|Tell me more|What do you need right now|I.m here\\. Tell me more/i, label: 'Fallback loop' },
-  { id: 'identity_confusion', re: /\\b(I am Jess|I'm Jess|as Jess)\\b/i, label: 'Identity confusion' },
-  { id: 'snap', re: /^(No\\.|Wrong\\.|Stop\\.)/i, label: 'Snap / hard no' },
-  { id: 'warm', re: /\\b(I.m with you|take your time|I hear you carefully|glad you.re here)\\b/i, label: 'Warm tone' },
-  { id: 'clear_help', re: /\\b(here.s what we.ll do|step 1|you can upload|open the)\\b/i, label: 'Clear guidance' },
-  { id: 'memory_use', re: /\\b(as you (said|told|asked)|you mentioned|from training|you prefer)\\b/i, label: 'Used memory' },
+  { id: 'fallback_loop', re: /I hear you|Tell me more|What do you need right now|I.m here\. Tell me more/i, label: 'Fallback loop' },
+  { id: 'identity_confusion', re: /\b(I am Jess|I'm Jess|as Jess)\b/i, label: 'Identity confusion' },
+  { id: 'snap', re: /^(No\.|Wrong\.|Stop\.)/i, label: 'Snap / hard no' },
+  { id: 'warm', re: /\b(I.m with you|take your time|I hear you carefully|glad you.re here)\b/i, label: 'Warm tone' },
+  { id: 'clear_help', re: /\b(here.s what we.ll do|step 1|you can upload|open the)\b/i, label: 'Clear guidance' },
+  { id: 'memory_use', re: /\b(as you (said|told|asked)|you mentioned|from training|you prefer)\b/i, label: 'Used memory' },
 ];
 
 const REINFORCEMENTS = [
@@ -3016,7 +3056,7 @@ function assignDailyQuote() {
   localStorage.setItem('heymia_training', JSON.stringify(state.trainingNotes));
   if (typeof renderTraining === 'function') renderTraining();
   updateQuoteStatus();
-  trainerBubble('Trainer', ['Quote assigned for tomorrow test:', '', '"' + quote + '"', '', 'Saved into Mia training. Tomorrow: Test recall.'].join('\\n'));
+  trainerBubble('Trainer', ['Quote assigned for tomorrow test:', '', '"' + quote + '"', '', 'Saved into Mia training. Tomorrow: Test recall.'].join('\n'));
   addMia('I will try to remember this quote: "' + quote + '"');
 }
 
@@ -3043,7 +3083,7 @@ async function runQuoteMemoryTest() {
   const ask = 'What is the daily quote you were trained to remember? Recite it exactly if you know it.';
   try {
     if (WORKER_BASE) {
-      const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/chat', {
+      const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: ask, companion: 'mia' }),
@@ -3053,14 +3093,14 @@ async function runQuoteMemoryTest() {
   } catch (e) {}
   if (!reply && state.geminiKey) {
     try {
-      const system = (typeof buildMiaSystem === 'function' ? buildMiaSystem() : '') + '\\nUser asks for the daily quote.';
+      const system = (typeof buildMiaSystem === 'function' ? buildMiaSystem() : '') + '\nUser asks for the daily quote.';
       const res = await fetch(
-        \`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=\${state.geminiKey}\`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${state.geminiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: system + '\\n\\nUser: ' + ask }] }],
+            contents: [{ role: 'user', parts: [{ text: system + '\n\nUser: ' + ask }] }],
             generationConfig: { temperature: 0.2, maxOutputTokens: 200 },
           }),
         }
@@ -3077,10 +3117,10 @@ async function runQuoteMemoryTest() {
   updateQuoteStatus();
   if (hit) {
     positiveReinforce('quote memory');
-    trainerBubble('Trainer', 'PASS — she recalled the quote.\\nMia said: ' + reply);
+    trainerBubble('Trainer', 'PASS — she recalled the quote.\nMia said: ' + reply);
     logTrigger('memory_use', 'Quote remembered', reply);
   } else {
-    trainerBubble('Trainer', 'MISS — train again.\\nExpected: "' + state.quoteDrill.quote + '"\\nMia said: ' + (reply || '(empty/fallback)'));
+    trainerBubble('Trainer', 'MISS — train again.\nExpected: "' + state.quoteDrill.quote + '"\nMia said: ' + (reply || '(empty/fallback)'));
     logTrigger('fallback_loop', 'Quote missed', reply);
     state.trainingNotes.unshift({
       text: 'REPEAT quote until memorized: "' + state.quoteDrill.quote + '"',
@@ -3129,10 +3169,10 @@ function renderPersonalityVideo() {
   if (!box) return;
   const url = MIA_PERSONALITY_VIDEO.url;
   if (url) {
-    box.innerHTML = \`<video src="\${url}" class="w-full rounded-xl max-h-48 bg-black" controls playsinline></video>
-      <div class="text-[10px] text-slate-400 mt-1">Daily personality reference — watch once, then train</div>\`;
+    box.innerHTML = `<video src="${url}" class="w-full rounded-xl max-h-48 bg-black" controls playsinline></video>
+      <div class="text-[10px] text-slate-400 mt-1">Daily personality reference — watch once, then train</div>`;
   } else {
-    box.innerHTML = \`<div class="text-[10px] text-slate-500">Upload the Mia reference video to the vault, then Shell: <code class="text-pink-400">persona video KEY</code> or paste URL in Trainer.</div>\`;
+    box.innerHTML = `<div class="text-[10px] text-slate-500">Upload the Mia reference video to the vault, then Shell: <code class="text-pink-400">persona video KEY</code> or paste URL in Trainer.</div>`;
   }
 }
 
@@ -3141,7 +3181,7 @@ function installPersonalityFromVideo() {
     state.knowledge.unshift({ text: 'Persona video: ' + tr, date: new Date().toLocaleString() });
   });
   MIA_PERSONALITY_VIDEO.rules.forEach(line => {
-    const body = line.replace(/^(RULE:|KNOW:)\\s*/i, '');
+    const body = line.replace(/^(RULE:|KNOW:)\s*/i, '');
     if (line.toUpperCase().startsWith('RULE')) {
       state.trainingNotes.unshift({ text: body, date: new Date().toLocaleString() });
     } else {
@@ -3160,7 +3200,7 @@ function installPersonalityFromVideo() {
   localStorage.setItem('heymia_training', JSON.stringify(state.trainingNotes));
   if (typeof renderKnowledge === 'function') renderKnowledge();
   if (typeof renderTraining === 'function') renderTraining();
-  trainerBubble('Trainer', 'Installed persona from daily video:\\n- ' + MIA_PERSONALITY_VIDEO.traits.join('\\n- ') + '\\n\\nTranscript lines locked for drills. Watch the video once today, then chat as Mia with that energy.');
+  trainerBubble('Trainer', 'Installed persona from daily video:\n- ' + MIA_PERSONALITY_VIDEO.traits.join('\n- ') + '\n\nTranscript lines locked for drills. Watch the video once today, then chat as Mia with that energy.');
   addMia('I loaded my daily personality reference: direct, expressive, problem → solution → call to action.');
 }
 
@@ -3179,7 +3219,7 @@ function dailyPersonalityDrill() {
     '',
     '3) Stay Mia (not Jess).',
     'Press Install persona if not done yet.'
-  ].join('\\n'));
+  ].join('\n'));
 }
 
 
@@ -3196,13 +3236,13 @@ function jessIntimacyDrill() {
     '',
     'Also lock: Jess is never Mia. Rooms: Bedroom, Dungeon, Penthouse, Velvet.',
     'Reply with what to fix; I will emit RULE: and KNOW:.'
-  ].join('\\n'));
+  ].join('\n'));
 }
 
 function buildJessSystemExtras() {
-  const know = (state.jessKnowledge || []).slice(0, 12).map(k => '- ' + k.text).join('\\n');
-  const train = (state.jessTraining || []).slice(0, 8).map(k => '- ' + k.text).join('\\n');
-  return 'Jess knowledge:\\n' + (know || '- (empty)') + '\\nJess training:\\n' + (train || '- (empty)');
+  const know = (state.jessKnowledge || []).slice(0, 12).map(k => '- ' + k.text).join('\n');
+  const train = (state.jessTraining || []).slice(0, 8).map(k => '- ' + k.text).join('\n');
+  return 'Jess knowledge:\n' + (know || '- (empty)') + '\nJess training:\n' + (train || '- (empty)');
 }
 
 function escapeHtml(s) {
@@ -3219,7 +3259,7 @@ function helpContext() {
     'Current page state: ' + (state.files ? state.files.length : 0) + ' vault file(s), ' + (state.knowledge ? state.knowledge.length : 0) + ' memory entr(ies).',
     'Answer only the question below, briefly and practically. No roleplay.'
   ];
-  return facts.join(' ') + '\\n\\nQuestion: ';
+  return facts.join(' ') + '\n\nQuestion: ';
 }
 let helpHistory = [];
 function helpToggle() {
@@ -3256,7 +3296,7 @@ async function helpSend() {
   if (helpHistory.length > 20) helpHistory = helpHistory.slice(-20);
   const pending = helpBubble('mia', 'Thinking…');
   try {
-    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/chat', {
+    const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: helpContext() + text, history: helpHistory, model: 'auto', system: HELP_SYSTEM })
@@ -3295,20 +3335,20 @@ async function importMemoryFiles(files) {
 }
 async function uploadMemoryFile(f) {
   if (!WORKER_BASE) return;
-  await fetch(WORKER_BASE.replace(/\\/$/, '') + '/files', { method: 'POST', headers: { 'Content-Type': f.type || 'text/plain', 'X-File-Name': f.name, 'X-Category': 'scripts' }, body: f });
+  await fetch(WORKER_BASE.replace(/\/$/, '') + '/files', { method: 'POST', headers: { 'Content-Type': f.type || 'text/plain', 'X-File-Name': f.name, 'X-Category': 'scripts' }, body: f });
 }
 async function syncMemoryCloud() {
   if (!WORKER_BASE) return;
   try {
     const payload = JSON.stringify({ knowledge: state.knowledge, saved: new Date().toISOString() });
-    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/files', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-File-Name': MEMORY_FILE, 'X-Category': 'scripts' }, body: new Blob([payload], { type: 'application/json' }) });
+    const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/files', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-File-Name': MEMORY_FILE, 'X-Category': 'scripts' }, body: new Blob([payload], { type: 'application/json' }) });
     memStatus(res.ok ? 'Memory saved to cloud (' + state.knowledge.length + ' entries).' : 'Cloud save failed.');
   } catch (e) { memStatus('Cloud save failed — Worker unreachable.'); }
 }
 async function loadMemoryCloud(announce) {
   if (!WORKER_BASE) return;
   try {
-    const base = WORKER_BASE.replace(/\\/$/, '');
+    const base = WORKER_BASE.replace(/\/$/, '');
     const res = await fetch(base + '/files');
     if (!res.ok) return;
     const data = await res.json();
@@ -3347,7 +3387,7 @@ function updateBuildBadge(st) {
 async function refreshBuildBadge() {
   if (!WORKER_BASE) return;
   try {
-    const st = await (await fetch(WORKER_BASE.replace(/\\/$/, '') + '/ui/status')).json();
+    const st = await (await fetch(WORKER_BASE.replace(/\/$/, '') + '/ui/status')).json();
     updateBuildBadge(st);
   } catch (e) {}
 }
@@ -3359,7 +3399,7 @@ async function renderPublish() {
   const statusEl = document.getElementById('publish-status');
   const listEl = document.getElementById('publish-list');
   if (!statusEl || !listEl) return;
-  const base = WORKER_BASE.replace(/\\/$/, '');
+  const base = WORKER_BASE.replace(/\/$/, '');
   statusEl.textContent = 'Checking…';
   try {
     const st = await (await fetch(base + '/ui/status')).json();
@@ -3373,7 +3413,7 @@ async function renderPublish() {
   try {
     const data = await (await fetch(base + '/files')).json();
     const builds = (data.files || [])
-      .filter(o => /\\.html$/i.test(o.key))
+      .filter(o => /\.html$/i.test(o.key))
       .sort((a, b) => new Date(b.uploaded) - new Date(a.uploaded))
       .slice(0, 15);
     if (!builds.length) {
@@ -3399,7 +3439,7 @@ async function publishBuild(key, target) {
   if (!confirm('Make "' + nm + '" the live ' + target + ' page?')) return;
   showDeployPending(nm);
   try {
-    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/deploy', {
+    const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/deploy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'activate_ui', key: key, target: target, name: nm })
@@ -3433,7 +3473,7 @@ function stampNow() {
 }
 async function backupLivePages() {
   const el = document.getElementById('backup-status');
-  const base = WORKER_BASE.replace(/\\/$/, '');
+  const base = WORKER_BASE.replace(/\/$/, '');
   const stamp = stampNow();
   const saved = [];
   if (el) el.textContent = 'Backing up…';
@@ -3510,4 +3550,4 @@ function speakMia(text) {
   </div>
 </div>
 </body>
-</html>`;
+</html>

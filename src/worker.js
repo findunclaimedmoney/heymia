@@ -1,9 +1,9 @@
 import workHtml from "./ui/work.html.js";
-import { handleAgentChat, routeFile } from "./ai.js";
-import { handleUiAdmin, matchHtmlPage, serveUI } from "./routing.js";
-import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound } from "./sites.js";
+import { handleAgentChat, routeFile, grokTroubleshoot } from "./ai.js";
+import { handleUiAdmin, matchHtmlPage, serveUI, unwrapHtml } from "./routing.js";
+import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound, designSiteHtml } from "./sites.js";
 
-const VERSION = "3.0.0";
+const VERSION = "3.2.0";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -38,7 +38,7 @@ async function listKvFiles(e, c) {
   }
   return f;
 }
-async function listR2Files(env, prefix = "files/") {
+async function listR2Files(env, prefix = "") {
   if (!vaultBound(env)) return [];
   const listed = await env.VAULT.list({ prefix, limit: 1000 });
   return (listed.objects || []).map((o) => ({
@@ -46,27 +46,130 @@ async function listR2Files(env, prefix = "files/") {
     name: o.key.replace(/^files\//, ""),
     size: o.size,
     uploaded: o.uploaded,
-    category: "vault",
+    category: o.key.startsWith("ui/") ? "ui" : o.key.startsWith("sites/") ? "sites" : "vault",
   }));
+}
+
+const LAST_DEPLOY_KEY = "deploy/last.json";
+
+async function readLastDeploy(env) {
+  try {
+    if (vaultBound(env)) {
+      const obj = await env.VAULT.get(LAST_DEPLOY_KEY);
+      if (obj) return JSON.parse(await obj.text());
+    }
+    if (env.MEMORY) {
+      const v = await env.MEMORY.get("deploy:last");
+      if (v) return JSON.parse(v);
+    }
+  } catch {}
+  return null;
+}
+
+async function writeLastDeploy(env, rec) {
+  const body = JSON.stringify(rec);
+  if (vaultBound(env)) {
+    await env.VAULT.put(LAST_DEPLOY_KEY, body, { httpMetadata: { contentType: "application/json" } });
+  }
+  if (env.MEMORY) await env.MEMORY.put("deploy:last", body);
+}
+
+async function resolveVaultKey(env, key) {
+  if (!key) return null;
+  const raw = String(key).replace(/^\//, "");
+  const tries = [raw];
+  if (!raw.startsWith("files/") && !raw.startsWith("ui/") && !raw.startsWith("vault/")) {
+    tries.push("files/" + raw, "vault/" + raw, "ui/" + raw);
+  }
+  for (const k of tries) {
+    const obj = await env.VAULT.get(k);
+    if (obj) return { key: k, obj };
+  }
+  return null;
+}
+
+async function runDeploy(env, body) {
+  const started = new Date().toISOString();
+  const action = body.action || "log";
+  const rec = {
+    ok: false,
+    action,
+    name: body.name || body.slug || body.key || "",
+    url: body.url || "",
+    error: body.error || "",
+    at: started,
+    verified: false,
+  };
+  try {
+    if (action === "log") {
+      rec.ok = body.ok !== false && !body.error;
+      rec.at = body.at || started;
+      await writeLastDeploy(env, rec);
+      return rec;
+    }
+    if (action === "publish_site" || action === "site") {
+      if (!vaultBound(env)) throw new Error("VAULT unbound — cannot publish");
+      const pub = await publishSite(env, body);
+      rec.ok = true;
+      rec.url = pub.url;
+      rec.name = pub.slug;
+    } else if (action === "activate_ui" || action === "ui") {
+      if (!vaultBound(env)) throw new Error("VAULT unbound — cannot activate UI");
+      const target = String(body.target || "work").toLowerCase();
+      if (!["work", "play", "landing", "admin", "studio"].includes(target)) throw new Error("invalid target");
+      const found = await resolveVaultKey(env, body.key);
+      if (!found) throw new Error("source key not found in R2: " + (body.key || "(empty)"));
+      const activeKey = "ui/" + target + "-active.html";
+      await env.VAULT.put(activeKey, await found.obj.arrayBuffer(), {
+        httpMetadata: { contentType: "text/html;charset=UTF-8" },
+        customMetadata: { sourceKey: found.key, activatedAt: started },
+      });
+      const domain = env.PUBLIC_DOMAIN || "";
+      rec.ok = true;
+      rec.name = found.key;
+      rec.url = domain + (target === "play" ? "/play" : target === "work" ? "/work" : "/" + target);
+    } else {
+      throw new Error("unknown deploy action: " + action);
+    }
+    rec.at = new Date().toISOString();
+    rec.error = "";
+  } catch (e) {
+    rec.ok = false;
+    rec.error = String(e.message || e);
+    rec.at = new Date().toISOString();
+  }
+  await writeLastDeploy(env, rec);
+  return rec;
 }
 
 async function statusPayload(env) {
   let vault = "missing";
   if (vaultBound(env)) {
     vault = "bound";
-    try { await env.VAULT.list({ prefix: "", limit: 1 }); }
-    catch (e) { vault = "error:" + (e.message || e); }
+    try {
+      await env.VAULT.list({ prefix: "", limit: 1 });
+    } catch (e) {
+      vault = "error:" + (e.message || e);
+    }
   }
   return {
-    ok: vault === "bound", status: "ok", service: "heymia", version: VERSION,
-    ai_model: env.GEMINI_MODEL || "gemini-3.8-flash", vault,
+    ok: vault === "bound",
+    status: "ok",
+    service: "heymia",
+    version: VERSION,
+    ai_model: (env.XAI_API_KEY || env.GROK_API_KEY) ? "grok-4.5" : (env.GEMINI_MODEL || "gemini-3.8-flash"),
+    vault,
+    last_deploy: await readLastDeploy(env),
     ai: env.AI ? "bound" : "missing",
     gemini: env.GEMINI_API_KEY || env.GEMINI ? "set" : "unset",
+    grok: env.XAI_API_KEY || env.GROK_API_KEY ? "set" : "unset",
     liveavatar: env.LIVEAVATAR_API_KEY || env.LIVEAVATAR ? "set" : "unset",
     stripe: env.STRIPE_SECRET_KEY || env.STRIPE ? "set" : "unset",
-    domain: env.PUBLIC_DOMAIN || null, avatar_id: AVATAR_ID,
+    domain: env.PUBLIC_DOMAIN || null,
+    avatar_id: AVATAR_ID,
     secrets_configured: {
       liveavatar: !!(env.LIVEAVATAR_API_KEY || env.LIVEAVATAR),
+      grok: !!(env.XAI_API_KEY || env.GROK_API_KEY),
       stripe: !!(env.STRIPE_SECRET_KEY || env.STRIPE),
       ai: !!(env.GEMINI_API_KEY || env.GEMINI),
       workers_ai: !!env.AI,
@@ -76,10 +179,14 @@ async function statusPayload(env) {
 
 async function putVaultFile(env, name, body, type, category) {
   const safe = String(name || "upload.bin").replace(/^\/+/, "").replace(/\.\./g, "");
+  let payload = body;
+  if (/\.html?$/i.test(safe) || (type && String(type).includes("html"))) {
+    payload = unwrapHtml(body);
+  }
   if (vaultBound(env)) {
     const key = "files/" + safe;
-    await env.VAULT.put(key, body, { httpMetadata: { contentType: type || mimeOf(safe) } });
-    return { ok: true, key, name: safe, size: body.byteLength || body.length || 0, category: category || "vault" };
+    await env.VAULT.put(key, payload, { httpMetadata: { contentType: type || mimeOf(safe) } });
+    return { ok: true, key, name: safe, size: payload.byteLength || payload.length || 0, category: category || "vault" };
   }
   if (env.MEMORY) {
     const id = crypto.randomUUID();
@@ -123,31 +230,51 @@ export default {
     const path = url.pathname;
     const method = request.method;
     if (method === "OPTIONS") return new Response(null, { status: 204, headers: corsH });
+
     try {
       if (path === "/health" || path === "/api/status" || (path === "/" && url.searchParams.get("format") === "json")) {
         return jsonR(await statusPayload(env));
       }
       if (path === "/config" && method === "GET") return jsonR({ avatar_url: AVATAR_URL, ws_url: WS_URL, avatar_id: AVATAR_ID, version: VERSION, model: env.GEMINI_MODEL || "gemini-3.8-flash" });
       if (path === "/env-check" && method === "GET") return jsonR(await statusPayload(env));
+
       const uiAdmin = await handleUiAdmin(request, env, path);
       if (uiAdmin) return jsonR(uiAdmin, uiAdmin.status || 200);
+
       if (path === "/route" && method === "POST") {
         const body = await request.json();
         return jsonR(routeFile(body.fileName, body.fileType, body.category));
       }
+
       if ((path === "/chat" || path === "/api/chat") && method === "POST") {
         const body = await request.json();
         const helpers = {
-          listFiles: async () => (await listR2Files(env)).concat(await listKvFiles(env)),
+          listFiles: async () => {
+            const r2 = await listR2Files(env);
+            const kv = await listKvFiles(env);
+            return r2.concat(kv);
+          },
           runTool: async (name, args) => {
             args = args || {};
             if (name === "worker_status") return statusPayload(env);
-            if (name === "list_vault") return { files: await listR2Files(env, args.prefix || "files/") };
+            if (name === "list_vault") return { files: await listR2Files(env, args.prefix || "") };
             if (name === "publish_site") {
               if (!vaultBound(env)) return { error: "VAULT unbound" };
               return publishSite(env, args);
             }
+            if (name === "design_site") {
+              if (!vaultBound(env)) return { error: "VAULT unbound" };
+              const html = args.html || designSiteHtml(args);
+              const rec = await publishSite(env, { ...args, html });
+              rec.designed = !args.html;
+              return rec;
+            }
+            if (name === "list_sites") {
+              if (!vaultBound(env)) return { error: "VAULT unbound", sites: [] };
+              return { ok: true, sites: await listSites(env) };
+            }
             if (name === "route_file") return routeFile(args.fileName, args.fileType, args.category);
+            if (name === "last_deploy") return (await readLastDeploy(env)) || { ok: false, error: "no deploys yet" };
             if (name === "create_room") {
               if (!vaultBound(env)) return { error: "VAULT unbound" };
               const rec = { id: "room-" + crypto.randomUUID().slice(0, 8), name: args.name, theme: args.theme || "", prompt: args.prompt || "", created: new Date().toISOString() };
@@ -158,22 +285,23 @@ export default {
           },
         };
         const result = await handleAgentChat(env, body, helpers);
-        if (env.MEMORY && body.messages && body.messages.length) {
-          await saveMem(env, body.agent || "Mia", body.mode || "work", "last", String(body.messages[body.messages.length - 1].content || "").slice(0, 200));
+        if (env.MEMORY && body.messages?.length) {
+          await saveMem(env, body.agent || "Mia", body.mode || "work", "last", String(body.messages.at(-1).content || "").slice(0, 200));
         }
         return jsonR(result);
       }
+
       if (path === "/files" || path === "/api/vault") {
         if (method === "GET") {
           const key = url.searchParams.get("key");
           if (key && vaultBound(env)) {
-            const obj = await env.VAULT.get(key.startsWith("files/") ? key : "files/" + key);
-            if (!obj) return jsonR({ error: "not found" }, 404);
-            return new Response(obj.body, { headers: { ...corsH, "Content-Type": obj.httpMetadata && obj.httpMetadata.contentType || mimeOf(key) } });
+            const found = await resolveVaultKey(env, key);
+            if (!found) return jsonR({ error: "not found" }, 404);
+            return new Response(found.obj.body, { headers: { ...corsH, "Content-Type": found.obj.httpMetadata?.contentType || mimeOf(found.key) } });
           }
           const cat = url.searchParams.get("category");
           const files = vaultBound(env) ? await listR2Files(env) : await listKvFiles(env, cat);
-          return jsonR({ ok: true, files: files, objects: files });
+          return jsonR({ ok: true, files, objects: files });
         }
         if (method === "POST") {
           const name = request.headers.get("X-File-Name") || request.headers.get("X-Filename");
@@ -184,7 +312,7 @@ export default {
             const saved = await putVaultFile(env, name, body, type, category);
             return jsonR(saved, saved.status || 200);
           }
-          const body = await request.json().catch(function(){ return {}; });
+          const body = await request.json().catch(() => ({}));
           const saved = await putVaultFile(env, body.name, body.content || "", body.type, body.category);
           return jsonR(saved, saved.status || 200);
         }
@@ -195,6 +323,41 @@ export default {
           return jsonR({ ok: true, deleted: key });
         }
       }
+
+      if (path === "/api/deploy" || path === "/deploy-status") {
+        if (method === "GET") {
+          return jsonR({ ok: true, last: await readLastDeploy(env), worker: await statusPayload(env) });
+        }
+        if (method === "POST") {
+          const rec = await runDeploy(env, await request.json());
+          return jsonR(rec, rec.ok ? 200 : 400);
+        }
+      }
+
+      if (path === "/api/grok" && method === "GET") {
+        return jsonR({ ok: true, grok: !!(env.XAI_API_KEY || env.GROK_API_KEY), model: "grok-4.5" });
+      }
+      if (path === "/api/grok" && method === "POST") {
+        const body = await request.json().catch(() => ({}));
+        const status = await statusPayload(env);
+        const g = await grokTroubleshoot(env, {
+          question: body.question || body.message || "",
+          context: JSON.stringify({ status, last_deploy: status.last_deploy, extra: body.context || "" }).slice(0, 2500),
+        });
+        return jsonR({ reply: g.text || g.error, response: g.text || g.error, ...g });
+      }
+
+      if (path === "/api/design" && method === "POST") {
+        const body = await request.json();
+        const html = body.html || designSiteHtml(body);
+        if (!vaultBound(env)) return jsonR({ ok: true, html, preview: true, slug: (body.name || "site").toLowerCase() });
+        const rec = await publishSite(env, { ...body, html });
+        rec.html = html;
+        rec.ok = true;
+        await writeLastDeploy(env, { ok: true, action: "design_site", name: rec.slug, url: rec.url, at: new Date().toISOString() });
+        return jsonR(rec);
+      }
+
       if (path.startsWith("/api/sites")) {
         if (!vaultBound(env)) return jsonR({ error: "VAULT missing. Cannot publish sites." }, 503);
         if (path === "/api/sites" && method === "GET") return jsonR({ ok: true, sites: await listSites(env) });
@@ -210,16 +373,18 @@ export default {
           return jsonR({ ok: true, deleted: slug });
         }
       }
+
       if (path.startsWith("/s/") && method === "GET") {
         if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
         return servePublishedSite(env, path);
       }
+
       if (path === "/session" && method === "GET") {
         const sessionId = crypto.randomUUID();
         const token = crypto.randomUUID();
         const companion = url.searchParams.get("companion") || "jess";
-        sessions.set(sessionId, { id: sessionId, token: token, companion: companion, status: "created", created_at: new Date().toISOString() });
-        return jsonR({ session_id: sessionId, token: token, companion: companion, avatar_url: AVATAR_URL, ws_url: WS_URL });
+        sessions.set(sessionId, { id: sessionId, token, companion, status: "created", created_at: new Date().toISOString() });
+        return jsonR({ session_id: sessionId, token, companion, avatar_url: AVATAR_URL, ws_url: WS_URL });
       }
       if (path === "/start" && method === "POST") {
         const body = await request.json();
@@ -249,10 +414,17 @@ export default {
         const data = await res.json();
         return jsonR({ payment_status: data.payment_status, amount_total: data.amount_total, currency: data.currency });
       }
+
       const page = matchHtmlPage(path);
-      if (page && method === "GET") return serveUI(env, page.r2Key, workHtml, page.name);
-      if (method === "GET" && (path === "/" || path.endsWith(".html"))) return serveUI(env, "ui/work-active.html", workHtml, "work");
-      return jsonR({ error: "Not found", path: path }, 404);
+      if (page && method === "GET") {
+        return serveUI(env, page.r2Key, workHtml, page.name);
+      }
+
+      if (method === "GET" && (path === "/" || path.endsWith(".html"))) {
+        return serveUI(env, "ui/work-active.html", workHtml, "work");
+      }
+
+      return jsonR({ error: "Not found", path }, 404);
     } catch (err) {
       return jsonR({ error: String(err && err.message || err) }, 500);
     }
