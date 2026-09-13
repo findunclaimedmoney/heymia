@@ -51,6 +51,11 @@ const TOOLS = [
         },
       },
       {
+        name: "last_deploy",
+        description: "Return the last website deploy result: success or fail, URL, error, timestamp.",
+        parameters: { type: "OBJECT", properties: {}, required: [] },
+      },
+      {
         name: "create_room",
         description: "Save a fantasy room scene for later sessions.",
         parameters: {
