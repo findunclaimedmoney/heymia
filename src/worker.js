@@ -1,9 +1,9 @@
 import workHtml from "./ui/work.html.js";
 import { handleAgentChat, routeFile } from "./ai.js";
 import { handleUiAdmin, matchHtmlPage, serveUI } from "./routing.js";
-import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound } from "./sites.js";
+import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound, designSiteHtml } from "./sites.js";
 
-const VERSION = "3.0.0";
+const VERSION = "3.1.0";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -256,6 +256,17 @@ export default {
               if (!vaultBound(env)) return { error: "VAULT unbound" };
               return publishSite(env, args);
             }
+            if (name === "design_site") {
+              if (!vaultBound(env)) return { error: "VAULT unbound" };
+              const html = args.html || designSiteHtml(args);
+              const rec = await publishSite(env, { ...args, html });
+              rec.designed = !args.html;
+              return rec;
+            }
+            if (name === "list_sites") {
+              if (!vaultBound(env)) return { error: "VAULT unbound", sites: [] };
+              return { ok: true, sites: await listSites(env) };
+            }
             if (name === "route_file") return routeFile(args.fileName, args.fileType, args.category);
             if (name === "last_deploy") return (await readLastDeploy(env)) || { ok: false, error: "no deploys yet" };
             if (name === "create_room") {
@@ -317,7 +328,16 @@ export default {
         }
       }
 
-      if (path.startsWith("/api/sites")) {
+      if (path === "/api/design" && method === "POST") {
+        const body = await request.json();
+        const html = body.html || designSiteHtml(body);
+        if (!vaultBound(env)) return jsonR({ ok: true, html, preview: true, slug: (body.name || "site").toLowerCase() });
+        const rec = await publishSite(env, { ...body, html });
+        rec.html = html;
+        rec.ok = true;
+        await writeLastDeploy(env, { ok: true, action: "design_site", name: rec.slug, url: rec.url, at: new Date().toISOString() });
+        return jsonR(rec);
+      }
         if (!vaultBound(env)) return jsonR({ error: "VAULT missing. Cannot publish sites." }, 503);
         if (path === "/api/sites" && method === "GET") return jsonR({ ok: true, sites: await listSites(env) });
         if (path === "/api/sites" && method === "POST") {

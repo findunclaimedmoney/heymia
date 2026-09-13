@@ -140,6 +140,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
       <button onclick="switchTool('editor')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="editor">CapCut Editor</button>
       <button onclick="switchTool('replace')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="replace">Find & Replace</button>
       <button onclick="switchTool('deploy')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="deploy">Deploy</button>
+      <button onclick="switchTool('sites')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="sites">Sites</button>
       <button onclick="switchTool('dedupe')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="dedupe">Dedupe</button>
       <button onclick="switchTool('api')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="api">API</button>
       <button onclick="switchTool('shell')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="shell">Shell</button>
@@ -324,6 +325,39 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
           <p class="text-xs text-slate-400">Files ready for publish to www.heymia.lensflow.au</p>
         </div>
         <div id="deploy-list" class="space-y-3"></div>
+      </div>
+
+      <!-- SITES / DESIGNER -->
+      <div id="tool-sites" class="absolute inset-0 hidden p-6 overflow-y-auto">
+        <div class="max-w-5xl mx-auto grid lg:grid-cols-2 gap-4">
+          <div class="glass rounded-2xl p-5 border border-white/10 space-y-3">
+            <h2 class="text-lg font-bold serif">Design a website</h2>
+            <p class="text-xs text-slate-400">Tell Mia the brand and offer. She designs a full page and can publish it live to /s/slug/.</p>
+            <input id="site-name" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm" placeholder="Brand name — Glimr, LensFlow, …">
+            <textarea id="site-brief" rows="5" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm" placeholder="Who it's for, what it does, tone, must-have sections…"></textarea>
+            <div class="flex flex-wrap gap-2 text-[10px] font-bold">
+              <button type="button" onclick="setSiteStyle('ink')" class="site-style px-2 py-1 rounded-lg bg-pink-600/80">ink</button>
+              <button type="button" onclick="setSiteStyle('light')" class="site-style px-2 py-1 rounded-lg glass-light">light</button>
+              <button type="button" onclick="setSiteStyle('ocean')" class="site-style px-2 py-1 rounded-lg glass-light">ocean</button>
+              <button type="button" onclick="setSiteStyle('gold')" class="site-style px-2 py-1 rounded-lg glass-light">gold</button>
+              <button type="button" onclick="setSiteStyle('forest')" class="site-style px-2 py-1 rounded-lg glass-light">forest</button>
+            </div>
+            <select id="site-industry" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs">
+              <option value="studio">studio</option><option value="agency">agency</option><option value="saas">saas</option>
+              <option value="portfolio">portfolio</option><option value="restaurant">restaurant</option><option value="legal">legal</option>
+            </select>
+            <div class="flex gap-2">
+              <button onclick="designWebsite(false)" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-xs font-bold">Generate preview</button>
+              <button onclick="designWebsite(true)" class="flex-1 py-2.5 rounded-xl bg-emerald-600 text-xs font-bold">Publish live</button>
+            </div>
+            <div id="site-status" class="text-[11px] text-slate-400"></div>
+            <div id="site-list" class="text-[11px] text-slate-400 space-y-1"></div>
+          </div>
+          <div class="glass rounded-2xl border border-white/10 overflow-hidden min-h-[420px] flex flex-col">
+            <div class="px-3 py-2 text-[10px] font-bold border-b border-white/10">Live preview</div>
+            <iframe id="site-preview" class="flex-1 w-full bg-black" title="Site preview"></iframe>
+          </div>
+        </div>
       </div>
 
       <!-- FAN STUDIO / LIVE AVATAR -->
@@ -783,6 +817,7 @@ function switchTool(t) {
   if (t === 'checklist') renderChecklist();
   if (t === 'training') renderTraining();
   if (t === 'deploy') { renderDeploy(); try { renderPublish(); } catch (e) {} }
+  if (t === 'sites') { try { renderPublishedSites(); } catch (e) {} }
 
   document.querySelectorAll('.tool-tab').forEach(btn => {
     const base = 'tool-tab px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 ';
@@ -853,6 +888,17 @@ async function sendToMia(e) {
     addMia('Daily Training panel open. Write what you want me to remember.');
     return;
   }
+  if (/\b(web\s?site|landing\s?page|design (a |the )?site|build (a |the )?site|create (a |the )?site)\b/i.test(text)) {
+    switchTool('sites');
+    const brief = document.getElementById('site-brief');
+    const nameEl = document.getElementById('site-name');
+    if (brief && !brief.value) brief.value = text;
+    const named = text.match(/(?:called|named|for)\s+([A-Za-z][\w\s]{1,40})/);
+    if (nameEl && named && !nameEl.value) nameEl.value = named[1].trim();
+    addMia('Sites is open. I’ll design it — generating now.');
+    designWebsite(true);
+    return;
+  }
 
   // Worker chat then Gemini
   addMia('Thinking…');
@@ -861,15 +907,25 @@ async function sendToMia(e) {
       const wres = await fetch(WORKER_BASE.replace(/\/$/, '') + '/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, companion: 'mia' }),
+        body: JSON.stringify({
+          message: text,
+          messages: [{ role: 'user', content: text }],
+          agent: 'Mia',
+          mode: 'work',
+          companion: 'mia',
+        }),
       });
       if (wres.ok) {
         const wdata = await wres.json();
         const box = document.getElementById('mia-chat');
         if (box.lastChild && box.lastChild.textContent.includes('Thinking')) box.removeChild(box.lastChild);
-        const reply = wdata.reply || '…';
+        const reply = wdata.reply || wdata.response || '…';
         addMia(reply);
         speakMiaText(reply);
+        if (wdata.site && wdata.site.url) {
+          showDeployResult({ ok: true, name: wdata.site.slug || 'site', url: wdata.site.url, at: new Date().toISOString() });
+          addMia('Live URL: ' + wdata.site.url);
+        }
         return;
       }
     }
@@ -1602,6 +1658,79 @@ async function doDeploy(i) {
     const rec = { ok: false, action: 'activate_ui', name: d.name, error: String(e.message || e), at: new Date().toISOString() };
     finish(rec);
     await logDeploy(rec);
+  }
+}
+
+state.siteStyle = 'ink';
+function setSiteStyle(s) {
+  state.siteStyle = s;
+  document.querySelectorAll('.site-style').forEach((b) => {
+    b.className = 'site-style px-2 py-1 rounded-lg ' + (b.textContent === s ? 'bg-pink-600/80' : 'glass-light');
+  });
+}
+function localDesignHtml(opts) {
+  const title = (opts.name || 'Studio').slice(0, 80);
+  const line = (opts.tagline || opts.brief || 'Designed by Mia.').slice(0, 240);
+  const pal = { ink:['#07060a','#f8fafc','#ec4899'], light:['#f6f1e8','#16141c','#9a3412'], ocean:['#04151c','#e8fbff','#22d3ee'], gold:['#0c0a07','#f8f1de','#eab308'], forest:['#08110c','#ecfdf3','#34d399'] }[opts.style || 'ink'] || ['#07060a','#f8fafc','#ec4899'];
+  const esc = (s) => String(s||'').replace(/[&<>]/g, (c) => ({ '&': '\u0026amp;', '<': '\u0026lt;', '>': '\u0026gt;' }[c]));
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
+<style>body{margin:0;background:${pal[0]};color:${pal[1]};font-family:system-ui;padding:48px 28px}h1{font-size:64px;letter-spacing:-.04em;max-width:16ch}p{color:#94a3b8;font-size:20px;max-width:52ch}.btn{display:inline-block;margin-top:24px;background:${pal[2]};color:#fff;padding:12px 18px;border-radius:999px;font-weight:700;text-decoration:none}.k{color:${pal[2]};letter-spacing:.16em;text-transform:uppercase;font-size:12px;font-weight:700}</style></head>
+<body><div class="k">${esc(opts.industry || 'studio')}</div><h1>${esc(title)}</h1><p>${esc(line)}</p><a class="btn" href="#contact">Start</a></body></html>`;
+}
+async function designWebsite(publish) {
+  const name = (document.getElementById('site-name') || {}).value || 'Studio';
+  const brief = (document.getElementById('site-brief') || {}).value || 'A sharp brand site.';
+  const industry = (document.getElementById('site-industry') || {}).value || 'studio';
+  const style = state.siteStyle || 'ink';
+  const st = document.getElementById('site-status');
+  if (st) st.textContent = publish ? 'Publishing…' : 'Designing…';
+  showDeployPending(name);
+  const payload = { name, brief, tagline: brief, style, industry };
+  let rec = null;
+  try {
+    const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/design', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+    const ct = res.headers.get('content-type') || '';
+    if (res.ok && ct.includes('json')) rec = await res.json();
+  } catch (e) {}
+  const html = (rec && rec.html) || localDesignHtml(payload);
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const frame = document.getElementById('site-preview');
+  if (frame) frame.src = url;
+  state.files.push({
+    id: 'site-' + Date.now(),
+    name: name.replace(/\s+/g, '-').toLowerCase() + '.html',
+    type: 'text/html',
+    size: html.length,
+    category: 'code',
+    url,
+    fileObj: blob,
+    status: (rec && rec.url) ? 'live' : 'ready',
+  });
+  renderCats();
+  renderFiles();
+  const live = rec && rec.url;
+  const result = { ok: !!(live || html), name, url: live || url, at: new Date().toISOString(), error: live || html ? '' : 'design failed' };
+  showDeployResult(result);
+  if (st) st.innerHTML = live
+    ? '<span class="text-emerald-400 font-bold">LIVE</span> <a class="underline" target="_blank" href="' + live + '">' + live + '</a>'
+    : 'Preview ready. Publish live once the Worker v3.1 is deployed.';
+  addMia(live ? ('Website live: ' + live) : ('Designed “' + name + '”. Preview is in Sites. Publish after Cloudflare picks up v3.1.'));
+  if (publish && rec && rec.url) try { renderPublishedSites(); } catch (e) {}
+}
+async function renderPublishedSites() {
+  const el = document.getElementById('site-list');
+  if (!el) return;
+  try {
+    const data = await (await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/sites')).json();
+    const sites = data.sites || [];
+    el.innerHTML = sites.length
+      ? sites.map((s) => '<div><a class="text-pink-300 underline" href="' + (s.url || '#') + '" target="_blank">' + (s.slug || s.url) + '</a> · ' + (s.files || 0) + ' files</div>').join('')
+      : 'No published sites yet.';
+  } catch (e) {
+    el.textContent = 'Worker /api/sites not reachable yet.';
   }
 }
 

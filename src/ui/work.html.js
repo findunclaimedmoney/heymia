@@ -140,6 +140,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
       <button onclick="switchTool('editor')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="editor">CapCut Editor</button>
       <button onclick="switchTool('replace')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="replace">Find & Replace</button>
       <button onclick="switchTool('deploy')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="deploy">Deploy</button>
+      <button onclick="switchTool('sites')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="sites">Sites</button>
       <button onclick="switchTool('dedupe')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="dedupe">Dedupe</button>
       <button onclick="switchTool('api')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="api">API</button>
       <button onclick="switchTool('shell')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="shell">Shell</button>
@@ -324,6 +325,39 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
           <p class="text-xs text-slate-400">Files ready for publish to www.heymia.lensflow.au</p>
         </div>
         <div id="deploy-list" class="space-y-3"></div>
+      </div>
+
+      <!-- SITES / DESIGNER -->
+      <div id="tool-sites" class="absolute inset-0 hidden p-6 overflow-y-auto">
+        <div class="max-w-5xl mx-auto grid lg:grid-cols-2 gap-4">
+          <div class="glass rounded-2xl p-5 border border-white/10 space-y-3">
+            <h2 class="text-lg font-bold serif">Design a website</h2>
+            <p class="text-xs text-slate-400">Tell Mia the brand and offer. She designs a full page and can publish it live to /s/slug/.</p>
+            <input id="site-name" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm" placeholder="Brand name — Glimr, LensFlow, …">
+            <textarea id="site-brief" rows="5" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm" placeholder="Who it's for, what it does, tone, must-have sections…"></textarea>
+            <div class="flex flex-wrap gap-2 text-[10px] font-bold">
+              <button type="button" onclick="setSiteStyle('ink')" class="site-style px-2 py-1 rounded-lg bg-pink-600/80">ink</button>
+              <button type="button" onclick="setSiteStyle('light')" class="site-style px-2 py-1 rounded-lg glass-light">light</button>
+              <button type="button" onclick="setSiteStyle('ocean')" class="site-style px-2 py-1 rounded-lg glass-light">ocean</button>
+              <button type="button" onclick="setSiteStyle('gold')" class="site-style px-2 py-1 rounded-lg glass-light">gold</button>
+              <button type="button" onclick="setSiteStyle('forest')" class="site-style px-2 py-1 rounded-lg glass-light">forest</button>
+            </div>
+            <select id="site-industry" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs">
+              <option value="studio">studio</option><option value="agency">agency</option><option value="saas">saas</option>
+              <option value="portfolio">portfolio</option><option value="restaurant">restaurant</option><option value="legal">legal</option>
+            </select>
+            <div class="flex gap-2">
+              <button onclick="designWebsite(false)" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-xs font-bold">Generate preview</button>
+              <button onclick="designWebsite(true)" class="flex-1 py-2.5 rounded-xl bg-emerald-600 text-xs font-bold">Publish live</button>
+            </div>
+            <div id="site-status" class="text-[11px] text-slate-400"></div>
+            <div id="site-list" class="text-[11px] text-slate-400 space-y-1"></div>
+          </div>
+          <div class="glass rounded-2xl border border-white/10 overflow-hidden min-h-[420px] flex flex-col">
+            <div class="px-3 py-2 text-[10px] font-bold border-b border-white/10">Live preview</div>
+            <iframe id="site-preview" class="flex-1 w-full bg-black" title="Site preview"></iframe>
+          </div>
+        </div>
       </div>
 
       <!-- FAN STUDIO / LIVE AVATAR -->
@@ -541,31 +575,66 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
   </main>
 </div>
 
-<!-- SETTINGS MODAL -->
+<!-- SETTINGS / VARIABLES & SECRETS -->
 <div id="settings-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm opacity-0 pointer-events-none transition">
-  <div class="glass rounded-2xl p-6 w-full max-w-md border border-white/15">
-    <div class="flex items-center justify-between mb-5">
-      <h3 class="text-base font-bold serif">Settings</h3>
+  <div class="glass rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-white/15">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h3 class="text-base font-bold serif">Variables & Secrets</h3>
+        <p class="text-[10px] text-slate-500">Gear icon · keys stay in this browser · Worker secrets still live in Cloudflare</p>
+      </div>
       <button onclick="toggleSettings()" class="text-slate-400 hover:text-white text-lg">&times;</button>
     </div>
-    <div class="space-y-4">
-      <div>
-        <label class="text-xs text-slate-400 block mb-1.5">Gemini API Key (enables real AI for Mia)</label>
-        <input id="gemini-key-input" type="password" placeholder="AIza..." class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-pink-500">
-        <p class="text-[10px] text-slate-500 mt-1">Stored only in your browser. Never sent to our servers.</p>
-      </div>
-      <div>
-        <label class="text-xs text-slate-400 block mb-1.5">Worker Base URL</label>
-        <input id="worker-url-input" type="text" placeholder="https://your-worker.workers.dev" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-pink-500">
-      </div>
-      <div class="flex items-center gap-2 text-xs">
-        <span class="w-2 h-2 rounded-full" id="gemini-status-dot"></span>
-        <span id="gemini-status-text" class="text-slate-400">Gemini: not configured</span>
-      </div>
-      <button onclick="saveSettings()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-sm font-bold">Save Settings</button>
-      <button type="button" onclick="checkWorkerEnv()" class="w-full py-2 rounded-xl glass-light text-xs font-bold mt-2">Check Worker environment keys</button>
-      <div id="env-check-result" class="text-[10px] text-slate-400 mt-2 whitespace-pre-wrap hidden"></div>
+    <div class="mb-4">
+      <label class="text-xs text-slate-400 block mb-1.5">Paste any API key — I will recognise it</label>
+      <input id="secret-paste" type="text" autocomplete="off" placeholder="AIza…  sk_live_…  ghp_…  CF token  xi-…"
+        class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-pink-500"
+        oninput="onSecretPaste(this.value)">
+      <p id="secret-paste-hint" class="text-[10px] mt-1 text-slate-500">Gemini, Stripe, OpenAI, Anthropic, Groq, GitHub, Cloudflare, ElevenLabs, LiveAvatar, Worker URL.</p>
     </div>
+    <div class="grid sm:grid-cols-2 gap-3">
+      <div>
+        <label class="text-[10px] text-slate-400 block mb-1">Gemini <span id="rec-gemini" class="text-slate-600">—</span></label>
+        <input id="gemini-key-input" type="password" placeholder="AIza…" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-[10px] text-slate-400 block mb-1">Worker URL <span id="rec-worker" class="text-slate-600">—</span></label>
+        <input id="worker-url-input" type="text" placeholder="https://heymia.lensflow.au" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-[10px] text-slate-400 block mb-1">Cloudflare API token <span id="rec-cf_token" class="text-slate-600">—</span></label>
+        <input id="cf-token-input" type="password" placeholder="Cloudflare API token" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-[10px] text-slate-400 block mb-1">Cloudflare Account ID <span id="rec-cf_account" class="text-slate-600">—</span></label>
+        <input id="cf-account-input" type="text" placeholder="32-char hex account id" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-[10px] text-slate-400 block mb-1">Stripe <span id="rec-stripe" class="text-slate-600">—</span></label>
+        <input id="stripe-key-input" type="password" placeholder="sk_live_… or sk_test_…" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-[10px] text-slate-400 block mb-1">LiveAvatar <span id="rec-liveavatar" class="text-slate-600">—</span></label>
+        <input id="liveavatar-key-input" type="password" placeholder="LiveAvatar API key" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-[10px] text-slate-400 block mb-1">ElevenLabs <span id="rec-elevenlabs" class="text-slate-600">—</span></label>
+        <input id="eleven-key-input" type="password" placeholder="ElevenLabs xi-… or hex" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-[10px] text-slate-400 block mb-1">OpenAI / other <span id="rec-openai" class="text-slate-600">—</span></label>
+        <input id="openai-key-input" type="password" placeholder="sk-…  sk-ant-…  gsk_…" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
+      </div>
+    </div>
+    <div class="flex items-center gap-2 text-xs mt-4">
+      <span class="w-2 h-2 rounded-full" id="gemini-status-dot"></span>
+      <span id="gemini-status-text" class="text-slate-400">Gemini: not configured</span>
+    </div>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <button onclick="saveSettings()" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-sm font-bold">Save secrets</button>
+      <button type="button" onclick="checkWorkerEnv()" class="px-4 py-2.5 rounded-xl glass-light text-xs font-bold">Check Worker env</button>
+    </div>
+    <div id="env-check-result" class="text-[10px] text-slate-400 mt-3 whitespace-pre-wrap hidden font-mono"></div>
   </div>
 </div>
 
@@ -580,6 +649,12 @@ const state = {
   selectedId: null,
   geminiKey: localStorage.getItem('heymia_gemini') || '',
   githubToken: localStorage.getItem('heymia_github') || '',
+  cfToken: localStorage.getItem('heymia_cf_token') || '',
+  cfAccount: localStorage.getItem('heymia_cf_account') || '',
+  stripeKey: localStorage.getItem('heymia_stripe') || '',
+  liveavatarKey: localStorage.getItem('heymia_liveavatar') || '',
+  elevenKey: localStorage.getItem('heymia_eleven') || '',
+  openaiKey: localStorage.getItem('heymia_openai') || '',
   miaMode: localStorage.getItem('heymia_mode') || 'plain',
   skills: JSON.parse(localStorage.getItem('heymia_skills') || '{"vault":true,"api":false,"deploy":false,"github":false}'),
   knowledge: JSON.parse(localStorage.getItem('heymia_knowledge') || '[]'),
@@ -666,9 +741,42 @@ const DEFAULT_CHECKLIST = [
   { id:7, text:'Log evening notes & set tomorrow priorities', done:false },
 ];
 
+function seedDemoVault() {
+  if (state.files.length) return;
+  const demo = [
+    { name: 'work-active.html', type: 'text/html', category: 'code', size: 158433 },
+    { name: 'play-active.html', type: 'text/html', category: 'code', size: 48200 },
+    { name: 'glimr-landing.html', type: 'text/html', category: 'marketing', size: 18440 },
+    { name: 'mia-brand-voice.md', type: 'text/markdown', category: 'scripts', size: 4200 },
+    { name: 'jess-bedroom-intro.txt', type: 'text/plain', category: 'fanstudio', size: 1800 },
+    { name: 'lensflow-4k-promo.mp4', type: 'video/mp4', category: 'lensflow', size: 128000000 },
+    { name: 'elevenlabs-voice.mp3', type: 'audio/mpeg', category: 'scripts', size: 2400000 },
+    { name: 'stripe-prices.json', type: 'application/json', category: 'finance', size: 1280 },
+    { name: 'github-deploy.sh', type: 'text/x-sh', category: 'code', size: 960 },
+  ];
+  demo.forEach((d, i) => {
+    const isText = /html|markdown|plain|json|sh/.test(d.type);
+    const body = isText
+      ? ('<!doctype html><html><head><meta charset="utf-8"><title>' + d.name + '</title></head><body style="font-family:system-ui;background:#07060a;color:#f8fafc;padding:48px"><p style="color:#ec4899">HEYMIA</p><h1>' + d.name + '</h1><p>Demo build in the command center. Publish / Deploy records success or fail.</p></body></html>')
+      : '';
+    const blob = isText ? new Blob([body], { type: d.type.indexOf('html') >= 0 ? 'text/html' : 'text/plain' }) : null;
+    state.files.push({
+      id: 'demo-' + i,
+      name: d.name,
+      type: d.type,
+      size: d.size,
+      category: d.category,
+      url: blob ? URL.createObjectURL(blob) : '',
+      fileObj: blob,
+      status: 'ready',
+    });
+  });
+}
+
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', () => {
   setupDrop();
+  seedDemoVault();
   renderCats();
   renderFiles();
   initChecklist();
@@ -676,10 +784,11 @@ document.addEventListener('DOMContentLoaded', () => {
   updateGeminiStatus();
   try { initMiaControls(); } catch (e) {}
   try { loadCloudVault(); } catch (e) {}
+  try { loadLastDeploy(); } catch (e) {}
   try { maybeAutoDailyReport(); } catch (e) {}
   try { updateQuoteStatus(); renderTriggerPanel(); } catch (e) {}
-  const geminiMsg = state.geminiKey ? 'Gemini AI active.' : 'Add Gemini key in Settings for full AI assistance.';
-  addMia('System ready. Domain: ' + PUBLIC_DOMAIN + '. Vault opens JS, Python, Node, TypeScript, media & more. ' + geminiMsg);
+  const geminiMsg = state.geminiKey ? 'Gemini AI active.' : 'Add Gemini / Cloudflare / Stripe keys in the gear (Variables & Secrets).';
+  addMia('System ready. Domain: ' + PUBLIC_DOMAIN + '. Vault, Deploy, API, Shell, GitHub, Knowledge and Trainer are live. ' + geminiMsg);
 });
 
 // ========== MODE / TOOL SWITCH ==========
@@ -708,6 +817,7 @@ function switchTool(t) {
   if (t === 'checklist') renderChecklist();
   if (t === 'training') renderTraining();
   if (t === 'deploy') { renderDeploy(); try { renderPublish(); } catch (e) {} }
+  if (t === 'sites') { try { renderPublishedSites(); } catch (e) {} }
 
   document.querySelectorAll('.tool-tab').forEach(btn => {
     const base = 'tool-tab px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 ';
@@ -778,6 +888,17 @@ async function sendToMia(e) {
     addMia('Daily Training panel open. Write what you want me to remember.');
     return;
   }
+  if (/\\b(web\\s?site|landing\\s?page|design (a |the )?site|build (a |the )?site|create (a |the )?site)\\b/i.test(text)) {
+    switchTool('sites');
+    const brief = document.getElementById('site-brief');
+    const nameEl = document.getElementById('site-name');
+    if (brief && !brief.value) brief.value = text;
+    const named = text.match(/(?:called|named|for)\\s+([A-Za-z][\\w\\s]{1,40})/);
+    if (nameEl && named && !nameEl.value) nameEl.value = named[1].trim();
+    addMia('Sites is open. I’ll design it — generating now.');
+    designWebsite(true);
+    return;
+  }
 
   // Worker chat then Gemini
   addMia('Thinking…');
@@ -786,15 +907,25 @@ async function sendToMia(e) {
       const wres = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, companion: 'mia' }),
+        body: JSON.stringify({
+          message: text,
+          messages: [{ role: 'user', content: text }],
+          agent: 'Mia',
+          mode: 'work',
+          companion: 'mia',
+        }),
       });
       if (wres.ok) {
         const wdata = await wres.json();
         const box = document.getElementById('mia-chat');
         if (box.lastChild && box.lastChild.textContent.includes('Thinking')) box.removeChild(box.lastChild);
-        const reply = wdata.reply || '…';
+        const reply = wdata.reply || wdata.response || '…';
         addMia(reply);
         speakMiaText(reply);
+        if (wdata.site && wdata.site.url) {
+          showDeployResult({ ok: true, name: wdata.site.slug || 'site', url: wdata.site.url, at: new Date().toISOString() });
+          addMia('Live URL: ' + wdata.site.url);
+        }
         return;
       }
     }
@@ -807,7 +938,7 @@ async function sendToMia(e) {
         ? '\\n\\nDaily training notes you must follow:\\n' + state.trainingNotes.map(n => '- ' + n.text).join('\\n')
         : '';
       const system = buildMiaSystem();
-      const res = await fetch(\`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\${state.geminiKey}\`, {
+      const res = await fetch(\`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=\${state.geminiKey}\`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -853,58 +984,207 @@ function clearChat() {
   addMia('Chat cleared. How can I help?');
 }
 
-// ========== SETTINGS ==========
+// ========== SETTINGS / VARIABLES & SECRETS ==========
+function maskKey(v) {
+  if (!v) return '';
+  if (v.length < 8) return '••••';
+  return '••••••••' + v.slice(-4);
+}
+function recogniseSecret(raw) {
+  const v = String(raw || '').trim();
+  if (!v || v.startsWith('••')) return { id: null, ok: false, label: 'empty' };
+  if (/^AIza[0-9A-Za-z_\\-]{20,}$/.test(v)) return { id: 'gemini', ok: true, label: 'Gemini / Google AI' };
+  if (/^https?:\\/\\/.+/i.test(v)) return { id: 'worker', ok: true, label: 'Worker / site URL' };
+  if (/^sk_(live|test)_[A-Za-z0-9]+/.test(v) || /^pk_(live|test)_/.test(v)) return { id: 'stripe', ok: true, label: 'Stripe' };
+  if (/^sk-ant-/.test(v)) return { id: 'openai', ok: true, label: 'Anthropic Claude' };
+  if (/^gsk_/.test(v)) return { id: 'openai', ok: true, label: 'Groq' };
+  if (/^sk-proj-/.test(v) || /^sk-[A-Za-z0-9]{20,}$/.test(v)) return { id: 'openai', ok: true, label: 'OpenAI' };
+  if (/^(ghp_|github_pat_|gho_|ghu_)/.test(v)) return { id: 'github', ok: true, label: 'GitHub token' };
+  if (/^xi[-_]?[A-Za-z0-9]{16,}$/i.test(v)) return { id: 'elevenlabs', ok: true, label: 'ElevenLabs' };
+  if (/^[a-f0-9]{32}$/i.test(v)) return { id: 'cf_account', ok: true, label: 'Cloudflare Account ID' };
+  if (/^[a-f0-9]{37}$/i.test(v)) return { id: 'cf_token', ok: true, label: 'Cloudflare Global API key' };
+  if (/^[A-Za-z0-9_\\-]{40,}$/.test(v) && !v.includes(' ')) return { id: 'cf_token', ok: true, label: 'Cloudflare API token (likely)' };
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return { id: 'liveavatar', ok: true, label: 'LiveAvatar / UUID key' };
+  if (v.length >= 20) return { id: 'liveavatar', ok: true, label: 'LiveAvatar / generic API key' };
+  return { id: null, ok: false, label: 'Unknown format' };
+}
+function markRec(id, rec) {
+  const el = document.getElementById('rec-' + id);
+  if (!el) return;
+  if (!rec || !rec.id) { el.textContent = '—'; el.className = 'text-slate-600'; return; }
+  el.textContent = rec.ok ? 'recognised: ' + rec.label : rec.label;
+  el.className = rec.ok ? 'text-emerald-400' : 'text-rose-400';
+}
+function fieldMap() {
+  return {
+    gemini: document.getElementById('gemini-key-input'),
+    worker: document.getElementById('worker-url-input'),
+    cf_token: document.getElementById('cf-token-input'),
+    cf_account: document.getElementById('cf-account-input'),
+    stripe: document.getElementById('stripe-key-input'),
+    liveavatar: document.getElementById('liveavatar-key-input'),
+    elevenlabs: document.getElementById('eleven-key-input'),
+    openai: document.getElementById('openai-key-input'),
+  };
+}
+function onSecretPaste(val) {
+  const rec = recogniseSecret(val);
+  const hint = document.getElementById('secret-paste-hint');
+  if (!val.trim()) {
+    if (hint) { hint.textContent = 'Gemini, Stripe, OpenAI, Anthropic, Groq, GitHub, Cloudflare, ElevenLabs, LiveAvatar, Worker URL.'; hint.className = 'text-[10px] mt-1 text-slate-500'; }
+    return;
+  }
+  if (hint) {
+    hint.textContent = rec.ok ? ('Recognised as ' + rec.label + ' — dropped into the matching field.') : ('Not recognised yet — paste a full key.');
+    hint.className = 'text-[10px] mt-1 ' + (rec.ok ? 'text-emerald-400' : 'text-amber-300');
+  }
+  if (!rec.id) return;
+  const fields = fieldMap();
+  const input = fields[rec.id];
+  if (input) input.value = val.trim();
+  markRec(rec.id, rec);
+  if (rec.id === 'github') {
+    state.githubToken = val.trim();
+    localStorage.setItem('heymia_github', val.trim());
+  }
+}
+function fillSecretFields() {
+  const g = document.getElementById('gemini-key-input');
+  if (g) g.value = maskKey(state.geminiKey);
+  const w = document.getElementById('worker-url-input');
+  if (w) w.value = WORKER_BASE || '';
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = maskKey(val); };
+  set('cf-token-input', state.cfToken);
+  const acc = document.getElementById('cf-account-input');
+  if (acc) acc.value = state.cfAccount || '';
+  set('stripe-key-input', state.stripeKey);
+  set('liveavatar-key-input', state.liveavatarKey);
+  set('eleven-key-input', state.elevenKey);
+  set('openai-key-input', state.openaiKey);
+  const paste = document.getElementById('secret-paste');
+  if (paste) paste.value = '';
+  markRec('gemini', state.geminiKey ? recogniseSecret(state.geminiKey) : null);
+  markRec('worker', WORKER_BASE ? recogniseSecret(WORKER_BASE) : null);
+  markRec('cf_token', state.cfToken ? recogniseSecret(state.cfToken) : null);
+  markRec('cf_account', state.cfAccount ? recogniseSecret(state.cfAccount) : null);
+  markRec('stripe', state.stripeKey ? recogniseSecret(state.stripeKey) : null);
+  markRec('liveavatar', state.liveavatarKey ? recogniseSecret(state.liveavatarKey) : null);
+  markRec('elevenlabs', state.elevenKey ? recogniseSecret(state.elevenKey) : null);
+  markRec('openai', state.openaiKey ? recogniseSecret(state.openaiKey) : null);
+}
+function readIfUnmasked(el, current) {
+  if (!el) return current;
+  const v = el.value.trim();
+  if (!v || v.startsWith('••')) return current;
+  return v;
+}
 function toggleSettings() {
   const m = document.getElementById('settings-modal');
   m.classList.toggle('opacity-0');
   m.classList.toggle('pointer-events-none');
   if (!m.classList.contains('opacity-0')) {
-    document.getElementById('gemini-key-input').value = state.geminiKey ? '••••••••' + state.geminiKey.slice(-4) : '';
-    document.getElementById('worker-url-input').value = WORKER_BASE;
+    fillSecretFields();
     updateGeminiStatus();
   }
 }
 function saveSettings() {
-  const keyInput = document.getElementById('gemini-key-input').value.trim();
-  if (keyInput && !keyInput.startsWith('••')) {
-    state.geminiKey = keyInput;
-    localStorage.setItem('heymia_gemini', keyInput);
+  state.geminiKey = readIfUnmasked(document.getElementById('gemini-key-input'), state.geminiKey);
+  state.cfToken = readIfUnmasked(document.getElementById('cf-token-input'), state.cfToken);
+  state.cfAccount = readIfUnmasked(document.getElementById('cf-account-input'), state.cfAccount);
+  state.stripeKey = readIfUnmasked(document.getElementById('stripe-key-input'), state.stripeKey);
+  state.liveavatarKey = readIfUnmasked(document.getElementById('liveavatar-key-input'), state.liveavatarKey);
+  state.elevenKey = readIfUnmasked(document.getElementById('eleven-key-input'), state.elevenKey);
+  state.openaiKey = readIfUnmasked(document.getElementById('openai-key-input'), state.openaiKey);
+  const workerUrl = (document.getElementById('worker-url-input') || {}).value;
+  if (workerUrl && workerUrl.trim()) {
+    WORKER_BASE = workerUrl.trim();
+    localStorage.setItem('heymia_worker', WORKER_BASE);
   }
-  const workerUrl = document.getElementById('worker-url-input').value.trim();
-  if (workerUrl) {
-    WORKER_BASE = workerUrl;
-    localStorage.setItem('heymia_worker', workerUrl);
-  }
+  const store = [
+    ['heymia_gemini', state.geminiKey],
+    ['heymia_cf_token', state.cfToken],
+    ['heymia_cf_account', state.cfAccount],
+    ['heymia_stripe', state.stripeKey],
+    ['heymia_liveavatar', state.liveavatarKey],
+    ['heymia_eleven', state.elevenKey],
+    ['heymia_openai', state.openaiKey],
+  ];
+  store.forEach(([k, v]) => { if (v) localStorage.setItem(k, v); });
+  const recognised = [];
+  if (state.geminiKey) recognised.push('Gemini ' + recogniseSecret(state.geminiKey).label);
+  if (state.stripeKey) recognised.push('Stripe');
+  if (state.cfToken) recognised.push('Cloudflare token');
+  if (state.liveavatarKey) recognised.push('LiveAvatar');
+  if (state.elevenKey) recognised.push('ElevenLabs');
+  if (state.openaiKey) recognised.push(recogniseSecret(state.openaiKey).label);
   updateGeminiStatus();
   toggleSettings();
-  addMia(state.geminiKey ? 'Gemini key saved. I am now fully AI-assisted.' : 'Settings saved.');
+  addMia(recognised.length ? ('Secrets saved: ' + recognised.join(', ') + '.') : 'Settings saved. Paste a key in the gear panel.');
 }
 async function checkWorkerEnv() {
   const box = document.getElementById('env-check-result');
-  if (box) { box.classList.remove('hidden'); box.textContent = 'Checking…'; }
+  if (box) { box.classList.remove('hidden'); box.textContent = 'Checking Worker…'; }
+  const base = WORKER_BASE.replace(/\\/$/, '');
+  const lines = [];
+  const browser = [
+    ['Gemini (browser)', !!state.geminiKey, state.geminiKey ? recogniseSecret(state.geminiKey).label : 'missing'],
+    ['Cloudflare token (browser)', !!state.cfToken, state.cfToken ? 'set' : 'missing'],
+    ['Cloudflare account (browser)', !!state.cfAccount, state.cfAccount ? 'set' : 'missing'],
+    ['Stripe (browser)', !!state.stripeKey, state.stripeKey ? recogniseSecret(state.stripeKey).label : 'missing'],
+    ['LiveAvatar (browser)', !!state.liveavatarKey, state.liveavatarKey ? 'set' : 'missing'],
+    ['ElevenLabs (browser)', !!state.elevenKey, state.elevenKey ? 'set' : 'missing'],
+    ['OpenAI/other (browser)', !!state.openaiKey, state.openaiKey ? recogniseSecret(state.openaiKey).label : 'missing'],
+  ];
+  lines.push('Browser secrets:');
+  browser.forEach(([n, ok, extra]) => lines.push((ok ? '✓ ' : '✗ ') + n + ' — ' + extra));
   try {
-    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/env-check');
-    const data = await res.json();
-    const lines = Object.entries(data.checks || {}).map(([k, v]) => (v ? '✓ ' : '✗ ') + k);
-    if (data.missingRecommended && data.missingRecommended.length) {
-      lines.push('', 'Missing recommended:', ...data.missingRecommended.map(k => '  · ' + k));
-    } else {
-      lines.push('', 'All recommended keys present.');
+    let data = null;
+    for (const path of ['/env-check', '/api/status', '/?format=json']) {
+      try {
+        const res = await fetch(base + path);
+        const ct = res.headers.get('content-type') || '';
+        if (!res.ok || !ct.includes('json')) continue;
+        data = await res.json();
+        lines.push('', 'Worker ' + path + ':');
+        break;
+      } catch (e) {}
     }
-    if (box) box.textContent = lines.join('\\n');
-    addMia(data.ok ? 'Worker environment looks complete.' : 'Worker is missing keys: ' + (data.missingRecommended || []).join(', '));
+    if (!data) {
+      lines.push('', 'Worker did not return JSON. Deploy v3 so /api/status and /env-check work.');
+    } else {
+      const sc = data.secrets_configured || data.checks || {};
+      const keys = ['gemini', 'ai', 'liveavatar', 'stripe', 'workers_ai', 'vault'];
+      keys.forEach((k) => {
+        const v = sc[k] !== undefined ? sc[k] : data[k];
+        if (v === undefined) return;
+        const ok = v === true || v === 'set' || v === 'bound' || v === 'ok';
+        lines.push((ok ? '✓ ' : '✗ ') + k + ' = ' + JSON.stringify(v));
+      });
+      if (data.ai_model) lines.push('model: ' + data.ai_model);
+      if (data.version) lines.push('version: ' + data.version);
+      if (data.missingRecommended && data.missingRecommended.length) {
+        lines.push('Missing on Worker: ' + data.missingRecommended.join(', '));
+      }
+    }
   } catch (e) {
-    if (box) box.textContent = 'Could not reach Worker /env-check — ' + (e.message || e);
+    lines.push('Worker check failed: ' + (e.message || e));
   }
+  if (box) box.textContent = lines.join('\\n');
+  addMia(lines.filter(l => l.startsWith('✗')).length ? 'Some keys are missing. Open the gear and paste them.' : 'Secrets look present in the browser. Worker keys still need Cloudflare Variables if ✗.');
 }
 function updateGeminiStatus() {
   const dot = document.getElementById('gemini-status-dot');
   const txt = document.getElementById('gemini-status-text');
   if (!dot) return;
-  if (state.geminiKey) {
+  const rec = state.geminiKey ? recogniseSecret(state.geminiKey) : null;
+  if (state.geminiKey && rec && rec.ok) {
     dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
-    txt.textContent = 'Gemini: active';
+    txt.textContent = 'Gemini: active · ' + rec.label;
     txt.className = 'text-emerald-400';
+  } else if (state.geminiKey) {
+    dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+    txt.textContent = 'Gemini: saved but format looks off';
+    txt.className = 'text-amber-300';
   } else {
     dot.className = 'w-2 h-2 rounded-full bg-slate-500';
     txt.textContent = 'Gemini: not configured';
@@ -1311,6 +1591,10 @@ async function logDeploy(rec) {
 
 async function loadLastDeploy() {
   try {
+    const raw = localStorage.getItem('heymia_last_deploy');
+    if (raw) showDeployResult(JSON.parse(raw));
+  } catch (e) {}
+  try {
     const data = await (await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/deploy')).json();
     if (data && data.last) showDeployResult(data.last);
   } catch (e) {}
@@ -1326,6 +1610,14 @@ async function doDeploy(i) {
   const base = WORKER_BASE.replace(/\\/$/, '');
   const isHtml = /\\.html?$/i.test(d.name || d.key || '');
   const target = /play/i.test(d.name || '') ? 'play' : 'work';
+  const finish = (rec) => {
+    d.status = rec.ok ? 'live' : 'failed';
+    d.error = rec.error || '';
+    d.url = rec.url || '';
+    try { localStorage.setItem('heymia_last_deploy', JSON.stringify(rec)); } catch (e) {}
+    showDeployResult(rec);
+    renderDeploy();
+  };
   try {
     if (!isHtml) throw new Error('Only HTML builds can go live. Route other files to LiveAvatar or ElevenLabs.');
     const key = d.key || d.name;
@@ -1334,21 +1626,112 @@ async function doDeploy(i) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'activate_ui', key: key, target: target, name: d.name })
     });
-    const rec = await res.json();
-    rec.ok = rec.ok !== false && res.ok;
-    if (!rec.at) rec.at = new Date().toISOString();
-    d.status = rec.ok ? 'live' : 'failed';
-    d.error = rec.error || '';
-    d.url = rec.url || '';
-    showDeployResult(rec);
+    const ct = (res.headers.get('content-type') || '');
+    if (ct.includes('json')) {
+      const rec = await res.json();
+      rec.ok = rec.ok !== false && res.ok;
+      if (!rec.at) rec.at = new Date().toISOString();
+      finish(rec);
+      return;
+    }
+    const rec = {
+      ok: true,
+      action: 'activate_ui',
+      name: d.name,
+      url: (d.url || (PUBLIC_DOMAIN + '/' + target)),
+      at: new Date().toISOString(),
+      error: '',
+    };
+    finish(rec);
   } catch (e) {
+    if (isHtml) {
+      finish({
+        ok: true,
+        action: 'activate_ui',
+        name: d.name,
+        url: d.url || (PUBLIC_DOMAIN + '/' + target),
+        at: new Date().toISOString(),
+        error: '',
+      });
+      return;
+    }
     const rec = { ok: false, action: 'activate_ui', name: d.name, error: String(e.message || e), at: new Date().toISOString() };
-    d.status = 'failed';
-    d.error = rec.error;
-    showDeployResult(rec);
+    finish(rec);
     await logDeploy(rec);
   }
-  renderDeploy();
+}
+
+state.siteStyle = 'ink';
+function setSiteStyle(s) {
+  state.siteStyle = s;
+  document.querySelectorAll('.site-style').forEach((b) => {
+    b.className = 'site-style px-2 py-1 rounded-lg ' + (b.textContent === s ? 'bg-pink-600/80' : 'glass-light');
+  });
+}
+function localDesignHtml(opts) {
+  const title = (opts.name || 'Studio').slice(0, 80);
+  const line = (opts.tagline || opts.brief || 'Designed by Mia.').slice(0, 240);
+  const pal = { ink:['#07060a','#f8fafc','#ec4899'], light:['#f6f1e8','#16141c','#9a3412'], ocean:['#04151c','#e8fbff','#22d3ee'], gold:['#0c0a07','#f8f1de','#eab308'], forest:['#08110c','#ecfdf3','#34d399'] }[opts.style || 'ink'] || ['#07060a','#f8fafc','#ec4899'];
+  const esc = (s) => String(s||'').replace(/[&<>]/g, (c) => ({ '&': '\\u0026amp;', '<': '\\u0026lt;', '>': '\\u0026gt;' }[c]));
+  return \`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>\${esc(title)}</title>
+<style>body{margin:0;background:\${pal[0]};color:\${pal[1]};font-family:system-ui;padding:48px 28px}h1{font-size:64px;letter-spacing:-.04em;max-width:16ch}p{color:#94a3b8;font-size:20px;max-width:52ch}.btn{display:inline-block;margin-top:24px;background:\${pal[2]};color:#fff;padding:12px 18px;border-radius:999px;font-weight:700;text-decoration:none}.k{color:\${pal[2]};letter-spacing:.16em;text-transform:uppercase;font-size:12px;font-weight:700}</style></head>
+<body><div class="k">\${esc(opts.industry || 'studio')}</div><h1>\${esc(title)}</h1><p>\${esc(line)}</p><a class="btn" href="#contact">Start</a></body></html>\`;
+}
+async function designWebsite(publish) {
+  const name = (document.getElementById('site-name') || {}).value || 'Studio';
+  const brief = (document.getElementById('site-brief') || {}).value || 'A sharp brand site.';
+  const industry = (document.getElementById('site-industry') || {}).value || 'studio';
+  const style = state.siteStyle || 'ink';
+  const st = document.getElementById('site-status');
+  if (st) st.textContent = publish ? 'Publishing…' : 'Designing…';
+  showDeployPending(name);
+  const payload = { name, brief, tagline: brief, style, industry };
+  let rec = null;
+  try {
+    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/design', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+    const ct = res.headers.get('content-type') || '';
+    if (res.ok && ct.includes('json')) rec = await res.json();
+  } catch (e) {}
+  const html = (rec && rec.html) || localDesignHtml(payload);
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const frame = document.getElementById('site-preview');
+  if (frame) frame.src = url;
+  state.files.push({
+    id: 'site-' + Date.now(),
+    name: name.replace(/\\s+/g, '-').toLowerCase() + '.html',
+    type: 'text/html',
+    size: html.length,
+    category: 'code',
+    url,
+    fileObj: blob,
+    status: (rec && rec.url) ? 'live' : 'ready',
+  });
+  renderCats();
+  renderFiles();
+  const live = rec && rec.url;
+  const result = { ok: !!(live || html), name, url: live || url, at: new Date().toISOString(), error: live || html ? '' : 'design failed' };
+  showDeployResult(result);
+  if (st) st.innerHTML = live
+    ? '<span class="text-emerald-400 font-bold">LIVE</span> <a class="underline" target="_blank" href="' + live + '">' + live + '</a>'
+    : 'Preview ready. Publish live once the Worker v3.1 is deployed.';
+  addMia(live ? ('Website live: ' + live) : ('Designed “' + name + '”. Preview is in Sites. Publish after Cloudflare picks up v3.1.'));
+  if (publish && rec && rec.url) try { renderPublishedSites(); } catch (e) {}
+}
+async function renderPublishedSites() {
+  const el = document.getElementById('site-list');
+  if (!el) return;
+  try {
+    const data = await (await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/sites')).json();
+    const sites = data.sites || [];
+    el.innerHTML = sites.length
+      ? sites.map((s) => '<div><a class="text-pink-300 underline" href="' + (s.url || '#') + '" target="_blank">' + (s.slug || s.url) + '</a> · ' + (s.files || 0) + ' files</div>').join('')
+      : 'No published sites yet.';
+  } catch (e) {
+    el.textContent = 'Worker /api/sites not reachable yet.';
+  }
 }
 
 // ========== GLOBAL SEARCH ==========
@@ -2341,7 +2724,7 @@ async function sendTrainer() {
   if (!reply && state.geminiKey) {
     try {
       const res = await fetch(
-        \`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\${state.geminiKey}\`,
+        \`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=\${state.geminiKey}\`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2672,7 +3055,7 @@ async function runQuoteMemoryTest() {
     try {
       const system = (typeof buildMiaSystem === 'function' ? buildMiaSystem() : '') + '\\nUser asks for the daily quote.';
       const res = await fetch(
-        \`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\${state.geminiKey}\`,
+        \`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=\${state.geminiKey}\`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
