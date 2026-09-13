@@ -21,7 +21,11 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
 .tab-active { background:linear-gradient(90deg,#ec4899,#a855f7); color:white; }
 .preview-empty { background:radial-gradient(circle at center,#1e1b4b 0%,#07060a 70%); }
 @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-.fade-in { animation:fadeIn .3s ease forwards; }
+@media (max-width: 768px) {
+  #mia-aside { width: 100% !important; max-width: none; max-height: 38vh; }
+  #vault-cats { width: 9rem !important; }
+  .resize-handle { display: none; }
+}
 .resize-handle { width:5px; cursor:col-resize; flex-shrink:0; background:transparent; position:relative; z-index:5; }
 .resize-handle:hover, .resize-handle.dragging { background:rgba(236,72,153,0.45); }
 #mia-aside, #vault-cats, #vault-preview { min-width:140px; max-width:55vw; }
@@ -134,7 +138,8 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
   <main class="flex-1 flex flex-col overflow-hidden relative">
     <!-- Tool tabs -->
     <div class="h-11 flex items-center gap-1 px-4 border-b border-white/10 glass shrink-0 overflow-x-auto">
-      <button onclick="switchTool('vault')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium tab-active shrink-0" data-tool="vault">File Vault</button>
+      <button onclick="switchTool('projects')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium tab-active shrink-0" data-tool="projects">Projects</button>
+      <button onclick="switchTool('vault')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="vault">File Vault</button>
       <button onclick="switchTool('workflow')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="workflow">Workflow</button>
       <button onclick="switchTool('checklist')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="checklist">Checklist</button>
       <button onclick="switchTool('training')" class="tool-tab px-3 py-1.5 rounded-lg text-xs font-medium glass-light text-slate-300 shrink-0" data-tool="training">Daily Training</button>
@@ -153,6 +158,20 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
 
     <!-- Tool panels -->
     <div class="flex-1 overflow-hidden relative">
+
+      <div id="tool-projects" class="absolute inset-0 overflow-y-auto p-4 md:p-6">
+        <div class="max-w-5xl mx-auto">
+          <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
+            <div>
+              <h2 class="text-lg font-bold serif">Projects</h2>
+              <p class="text-[11px] text-slate-400">Phone or laptop — tap a card to open files. Empty boards are ready for uploads.</p>
+            </div>
+            <button onclick="seedProductsNow()" class="px-3 py-2 rounded-xl bg-pink-600 text-xs font-bold">Refresh folders</button>
+          </div>
+          <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+          <div id="product-files" class="mt-4 hidden"></div>
+        </div>
+      </div>
 
       <!-- FILE VAULT -->
       <div id="tool-vault" class="absolute inset-0 flex">
@@ -793,6 +812,7 @@ document.addEventListener('DOMContentLoaded', () => {
   try { loadLastDeploy(); } catch (e) {}
   try { maybeAutoDailyReport(); } catch (e) {}
   try { updateQuoteStatus(); renderTriggerPanel(); } catch (e) {}
+  switchTool('projects');
   const geminiMsg = state.geminiKey ? 'Gemini AI active.' : 'Add Gemini / Cloudflare / Stripe keys in the gear (Variables & Secrets).';
   addMia('Mia online — Grok 4.5 assistant. Vault, Sites, Deploy and troubleshooting are in my hands. ' + geminiMsg);
 });
@@ -803,7 +823,7 @@ function switchMode(m) {
   document.getElementById('btn-mode-work').className = m==='work' ? 'px-3 py-1.5 rounded-lg text-xs font-bold tab-active' : 'px-3 py-1.5 rounded-lg text-xs font-bold glass-light text-slate-300';
   document.getElementById('btn-mode-play').className = m==='play' ? 'px-3 py-1.5 rounded-lg text-xs font-bold tab-active' : 'px-3 py-1.5 rounded-lg text-xs font-bold glass-light text-slate-300';
   if (m === 'play') switchTool('studio');
-  else switchTool('vault');
+  else switchTool('projects');
 }
 
 function switchTool(t) {
@@ -824,6 +844,7 @@ function switchTool(t) {
   if (t === 'training') renderTraining();
   if (t === 'deploy') { renderDeploy(); try { renderPublish(); } catch (e) {} }
   if (t === 'sites') { try { renderPublishedSites(); } catch (e) {} }
+  if (t === 'projects') { try { renderProducts(); } catch (e) {} }
 
   document.querySelectorAll('.tool-tab').forEach(btn => {
     const base = 'tool-tab px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 ';
@@ -1444,12 +1465,69 @@ function guessCatFromCloud(name, type) {
   return 'unsorted';
 }
 
-function catName(id) { return CATS.find(c => c.id === id)?.name || id; }
+const PRODUCTS_UI = [
+  { slug:'sovereignquant', name:'Sovereign Quant', urls:[], blurb:'Multi-agent quant system' },
+  { slug:'lensflow', name:'LensFlow Dating', urls:['https://lensflow.com.au'], blurb:'Dating site · companions · Play' },
+  { slug:'missingcash', name:'Missing Cash', urls:['https://missingcash.com.au'], blurb:'Unclaimed money finder' },
+  { slug:'bartermint', name:'Bartermint', urls:['https://bartermint.polsia.app','https://bartermint.onhercules.app'], blurb:'Barter marketplace' },
+  { slug:'realestate', name:'LensFlow Real Estate', urls:[], blurb:'Pipeline + mobile' },
+];
+
+async function renderProducts() {
+  const grid = document.getElementById('product-grid');
+  if (!grid) return;
+  let remote = PRODUCTS_UI;
+  try {
+    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/products');
+    const data = await res.json();
+    if (data.products && data.products.length) remote = data.products;
+  } catch (e) {}
+  grid.innerHTML = remote.map((p) => {
+    const n = p.files != null ? p.files : state.files.filter((f) => fileProject(f) === p.slug).length;
+    const links = (p.urls || []).map((u) => \`<a class="text-pink-300 underline" href="\${u}" target="_blank" rel="noopener">\${u.replace(/^https?:\\/\\//,'')}</a>\`).join('<br>');
+    return \`<button onclick="openProduct('\${p.slug}')" class="text-left glass rounded-2xl p-4 border border-white/10 hover:border-pink-500/40">
+      <div class="text-sm font-bold">\${p.name}</div>
+      <div class="text-[11px] text-slate-400 mt-1">\${p.blurb || ''}</div>
+      <div class="text-[10px] text-pink-300 mt-2">\${n} file\${n===1?'':'s'}</div>
+      <div class="text-[10px] mt-2 leading-relaxed">\${links || 'No live URL yet'}</div>
+    </button>\`;
+  }).join('');
+}
+
+function openProduct(slug) {
+  const p = PRODUCTS_UI.find((x) => x.slug === slug) || { slug, name: slug };
+  const files = state.files.filter((f) => fileProject(f) === slug);
+  const box = document.getElementById('product-files');
+  box.classList.remove('hidden');
+  box.innerHTML = \`<div class="glass rounded-2xl p-4 border border-white/10">
+    <div class="flex justify-between items-center mb-2">
+      <div class="font-bold text-sm">\${p.name}</div>
+      <button class="text-[10px] text-slate-400" onclick="document.getElementById('product-files').classList.add('hidden')">Close</button>
+    </div>
+    \${files.length ? files.map((f) => \`<button onclick="switchTool('vault');setProject('\${slug}');selectFile('\${f.id}')" class="block w-full text-left text-xs py-2 border-b border-white/5">\${escapeHtml(f.name)}</button>\`).join('') : '<div class="text-xs text-slate-400">No files yet. Drop uploads and say “file this into ' + p.name + '”.</div>'}
+  </div>\`;
+}
+
+async function seedProductsNow() {
+  addMia('Seeding the 5 project boards and filing files…');
+  try {
+    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/products', { method: 'POST' });
+    const rec = await res.json();
+    if (!rec.ok) throw new Error(rec.error || 'seed failed');
+    addMia('Projects ready: Sovereign Quant, LensFlow Dating, Missing Cash, Bartermint, Real Estate.');
+    state.files = state.files.filter((f) => !f.key);
+    await loadCloudVault();
+    renderProducts();
+  } catch (e) {
+    addMia('Seed failed: ' + (e.message || e) + '. Need Worker v3.4.');
+  }
+}
 function fileProject(f) {
   const k = f.key || '';
   const m = k.match(/^projects\\/([^/]+)/);
-  if (m) return m[1];
-  return f.project || 'inbox';
+  const raw = m ? m[1] : (f.project || '');
+  const alias = { 'sovereign-quant':'sovereignquant', 'agent-core':'sovereignquant', 'liveavatar':'lensflow', 'heymia-play':'lensflow', inbox:'heymia', convex:'heymia', 'heymia-work':'heymia' };
+  return alias[raw] || raw || 'heymia';
 }
 
 function renderCats() {

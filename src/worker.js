@@ -2,9 +2,9 @@ import workHtml from "./ui/work.html.js";
 import { handleAgentChat, routeFile, grokTroubleshoot } from "./ai.js";
 import { handleUiAdmin, matchHtmlPage, serveUI, unwrapHtml } from "./routing.js";
 import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound, designSiteHtml } from "./sites.js";
-import { classifyProject, organizeVault } from "./projects.js";
+import { classifyProject, organizeVault, listProducts, seedProducts } from "./projects.js";
 
-const VERSION = "3.3.0";
+const VERSION = "3.4.0";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -409,11 +409,21 @@ export default {
         const files = vaultBound(env) ? await listR2Files(env) : [];
         const plan = {};
         for (const f of files) {
-          const p = f.project || "inbox";
+          const p = f.project || "heymia";
           plan[p] = plan[p] || [];
           plan[p].push(f.key);
         }
         return jsonR({ ok: true, plan, files: files.length });
+      }
+      if (path === "/api/products" && method === "GET") {
+        if (!vaultBound(env)) return jsonR({ ok: true, products: [] });
+        return jsonR({ ok: true, products: await listProducts(env) });
+      }
+      if (path === "/api/products" && method === "POST") {
+        if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
+        const seeded = await seedProducts(env);
+        const org = await organizeVault(env);
+        return jsonR({ ok: true, ...seeded, organize: org });
       }
 
       if (path === "/api/grok" && method === "GET") {
