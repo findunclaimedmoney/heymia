@@ -5,7 +5,7 @@ import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound, designS
 import { classifyProject, organizeVault, listProducts, seedProducts } from "./projects.js";
 import { seedMarketing, listMarketing, saveMarketing, CAPCUT_FREE, MARKETING_KINDS, SOCIAL, saveSocial, readSocial, shareUrl } from "./marketing.js";
 
-const VERSION = "3.6.0";
+const VERSION = "3.7.0";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";

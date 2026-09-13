@@ -98,7 +98,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
     <div id="mia-chat" class="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
       <div class="msg-mia rounded-2xl rounded-tl-sm p-3 fade-in">
         <div class="font-bold text-pink-400 text-[10px] mb-1">Mia</div>
-        Ready. Drop mixed files or tell me what to build. I will categorise them, route voice assets to ElevenLabs, video/avatar assets to LiveAvatar, and keep everything under <span class="text-pink-300">www.heymia.lensflow.au</span>.
+        Ready when you are. Say what you actually need — I'll pick it up from there.
       </div>
     </div>
 
@@ -860,7 +860,7 @@ document.addEventListener('DOMContentLoaded', () => {
   try { updateQuoteStatus(); renderTriggerPanel(); } catch (e) {}
   switchTool('projects');
   const geminiMsg = state.geminiKey ? 'Gemini AI active.' : 'Add Gemini / Cloudflare / Stripe keys in the gear (Variables & Secrets).';
-  addMia('Mia online — Grok 4.5 assistant. Vault, Sites, Deploy and troubleshooting are in my hands. ' + geminiMsg);
+  addMia("I'm here. What's on your mind?");
 });
 
 // ========== MODE / TOOL SWITCH ==========
@@ -958,7 +958,7 @@ async function sendToMia(e) {
   try { trackMiaSignal('message'); if (/\\b(wrong|not jess|not mia|stop|aggressive)\\b/i.test(text)) trackMiaSignal('correction'); } catch(e) {}
   input.value = '';
 
-  // Fast local commands still work instantly
+  // Local: only hard UI commands. Everything else goes to Mia so she can actually answer.
   const lower = text.toLowerCase();
   if (lower.includes('activate upgrade') || lower.startsWith('upgrade work')) {
     const f = state.files.slice().reverse().find(x => x.key && /\\.html$/i.test(x.name || ''));
@@ -968,74 +968,29 @@ async function sendToMia(e) {
   }
   if (lower.includes('ui status')) { uiStatus(); return; }
   if (lower.includes('reset ui') || lower.includes('upgrade reset')) { resetUpgrade('work'); return; }
-  if (lower.includes('live avatar') || lower.includes('start session')) {
-    addMia('Opening Fan Studio and starting LiveAvatar…');
-    switchTool('studio');
-    startLiveSession();
-    return;
-  }
-  if (lower.includes('open vault') || lower.includes('show files')) {
-    switchTool('vault');
-    addMia('File Vault is open.');
-    return;
-  }
-  if (lower.includes('checklist')) {
-    switchTool('checklist');
-    addMia('Checklist ready.');
-    return;
-  }
-  if (lower.includes('train') || lower.includes('training')) {
-    switchTool('training');
-    addMia('Daily Training panel open. Write what you want me to remember.');
-    return;
-  }
-  if (/\\b(organis|organiz|file (these|the) (files|vault)|project folder|sort the vault)\\b/i.test(text)) {
-    switchTool('vault');
-    organizeVaultNow();
-    return;
-  }
-  if (/\\b(clip|reel|tiktok|caption|capcut|marketing (post|video)|make a post|make a video|make a clip)\\b/i.test(text)) {
+  if (lower.includes('live avatar') || lower.includes('start session')) switchTool('studio');
+  if (lower.includes('open vault') || lower.includes('show files')) switchTool('vault');
+  if (lower.includes('checklist')) switchTool('checklist');
+  if (/\\btraining\\b/.test(lower)) switchTool('training');
+  if (/\\b(organis|organiz|sort the vault)\\b/i.test(text)) switchTool('vault');
+  if (/\\b(clip|reel|tiktok|capcut|make a post|make a video|make a clip)\\b/i.test(text)) {
     switchTool('editor');
     const brief = document.getElementById('mkt-brief');
     if (brief && !brief.value) brief.value = text;
-    const hit = PRODUCTS_UI.find((p) => text.toLowerCase().includes(p.slug) || text.toLowerCase().includes((p.name.split(' ')[0] || '').toLowerCase()));
-    if (hit) state.mktProject = hit.slug;
-    renderMarketing();
-    mktWriteScript();
-    return;
   }
-  if (/\\b(clip|reel|tiktok|caption|capcut|marketing (post|video)|make a post|make a video)\\b/i.test(text)) {
-    switchTool('editor');
-    const brief = document.getElementById('mkt-brief');
-    if (brief && !brief.value) brief.value = text;
-    const hit = PRODUCTS_UI.find((p) => text.toLowerCase().includes(p.slug) || text.toLowerCase().includes(p.name.toLowerCase().split(' ')[0]));
-    if (hit) state.mktProject = hit.slug;
-    renderMarketing();
-    mktWriteScript();
-    return;
-  }
-  if (state.miaMode === 'grok' || /^(grok|troubleshoot)\\b/i.test(text) || /\\b(troubleshoot|debug this|form.?boundary)\\b/i.test(text)) {
-    addMia('Asking Grok…');
-    askGrokTroubleshoot(text);
-    return;
-  }
-  if (/\\b(web\\s?site|landing\\s?page|design (a |the )?site|build (a |the )?site|create (a |the )?site)\\b/i.test(text)) {
+  if (/\\b(web\\s?site|landing\\s?page|design (a |the )?site)\\b/i.test(text)) {
     switchTool('sites');
     const brief = document.getElementById('site-brief');
-    const nameEl = document.getElementById('site-name');
     if (brief && !brief.value) brief.value = text;
-    const named = text.match(/(?:called|named|for)\\s+([A-Za-z][\\w\\s]{1,40})/);
-    if (nameEl && named && !nameEl.value) nameEl.value = named[1].trim();
-    addMia('Sites is open. I’ll design it — generating now.');
-    designWebsite(true);
-    return;
   }
 
-  // Grok-4.5 Mia first (preview /api/chat), then Worker /chat, then browser Gemini
+  if (!state.miaTurns) state.miaTurns = [];
+  state.miaTurns.push({ role: 'user', content: text });
+
   addMia('Thinking…');
   const payloads = JSON.stringify({
     message: text,
-    messages: [{ role: 'user', content: text }],
+    messages: (state.miaTurns || [{ role: 'user', content: text }]).slice(-16),
     agent: 'Mia',
     mode: 'work',
     companion: 'mia',
@@ -1058,6 +1013,8 @@ async function sendToMia(e) {
         const reply = wdata.reply || wdata.response;
         if (!reply) continue;
         addMia(reply);
+        if (!state.miaTurns) state.miaTurns = [];
+        state.miaTurns.push({ role: 'assistant', content: reply });
         speakMiaText(reply);
         if (wdata.site && wdata.site.url) {
           showDeployResult({ ok: true, name: wdata.site.slug || 'site', url: wdata.site.url, at: new Date().toISOString() });
@@ -2962,15 +2919,13 @@ function buildMiaSystem() {
     : 'No special skills flagged.';
   const know = (state.knowledge || []).slice(0, 12).map(k => '- ' + k.text).join('\\n');
   const train = (state.trainingNotes || []).slice(0, 8).map(k => '- ' + k.text).join('\\n');
-  return \`You are Mia, ops agent for HeyMia (heymia.lensflow.au).
+  return \`You are Mia. Talk like a real colleague. First sentence: show you heard THIS message. No filler (Great question, I hear you, I'd be happy to).
 \${mode}
 \${skillLine}
-Knowledge base:
-\${know || '- (empty)'}
-Training notes:
-\${train || '- (empty)'}
-Vault files right now: \${(state.files || []).length}.
-Keep answers useful. Do not invent secrets or payment facts.\`;
+Notes you were trained on:
+\${train || '- (none)'}
+\${know ? 'Knowledge:\\n'+know : ''}
+Do not invent secrets.\`;
 }
 
 // init mode/skill UI after load
