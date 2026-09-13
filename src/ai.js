@@ -155,6 +155,27 @@ function callsFromCandidate(data) {
 
 function openaiTools() {
   const decls = (TOOLS[0] && TOOLS[0].functionDeclarations) || [];
+  const lower = (n) => ({ OBJECT: "object", STRING: "string", NUMBER: "number", BOOLEAN: "boolean", ARRAY: "array" }[n] || String(n || "string").toLowerCase());
+  return decls.map((f) => {
+    const props = {};
+    for (const [k, v] of Object.entries(f.parameters?.properties || {})) {
+      props[k] = { ...v, type: lower(v.type) };
+    }
+    return {
+      type: "function",
+      function: {
+        name: f.name,
+        description: f.description,
+        parameters: {
+          type: "object",
+          properties: props,
+          required: f.parameters?.required || [],
+        },
+      },
+    };
+  });
+}
+  const decls = (TOOLS[0] && TOOLS[0].functionDeclarations) || [];
   return decls.map((f) => ({
     type: "function",
     function: {
@@ -189,7 +210,7 @@ export async function grokAssistant(env, { messages, system, helpers, context })
         model: "grok-4.5",
         max_tokens: 1200,
         messages: msgs,
-        tools: openaiTools(),
+        ...(helpers && helpers.runTool ? { tools: openaiTools() } : {}),
       }),
     });
     const data = await res.json().catch(() => ({}));

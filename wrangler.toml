@@ -23,6 +23,6 @@ GEMINI_MODEL = "gemini-3.8-flash"
 # binding = "MEMORY"
 # id = "your-kv-namespace-id"
 #
-# [[r2_buckets]]
-# binding = "VAULT"
-# bucket_name = "heymia-vault"
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "heymia-vault"
