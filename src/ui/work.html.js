@@ -157,6 +157,9 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
       <!-- FILE VAULT -->
       <div id="tool-vault" class="absolute inset-0 flex">
         <div id="vault-cats" class="border-r border-white/10 p-3 overflow-y-auto shrink-0" style="width:14rem">
+          <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Projects</div>
+          <div id="project-list" class="space-y-1 mb-3"></div>
+          <button onclick="organizeVaultNow()" class="w-full mb-3 py-1.5 rounded-lg bg-pink-600/80 hover:bg-pink-500 text-[10px] font-bold">File into project folders</button>
           <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Categories</div>
           <div id="cat-list" class="space-y-1"></div>
         </div>
@@ -648,6 +651,8 @@ const PUBLIC_DOMAIN = 'https://heymia.lensflow.au';
 const state = {
   files: [],
   selectedId: null,
+  currentCat: 'all',
+  currentProject: '',
   geminiKey: localStorage.getItem('heymia_gemini') || '',
   githubToken: localStorage.getItem('heymia_github') || '',
   cfToken: localStorage.getItem('heymia_cf_token') || '',
@@ -914,6 +919,11 @@ async function sendToMia(e) {
   if (lower.includes('train') || lower.includes('training')) {
     switchTool('training');
     addMia('Daily Training panel open. Write what you want me to remember.');
+    return;
+  }
+  if (/\\b(organis|organiz|file (these|the) (files|vault)|project folder|sort the vault)\\b/i.test(text)) {
+    switchTool('vault');
+    organizeVaultNow();
     return;
   }
   if (state.miaMode === 'grok' || /^(grok|troubleshoot)\\b/i.test(text) || /\\b(troubleshoot|debug this|form.?boundary)\\b/i.test(text)) {
@@ -1435,26 +1445,73 @@ function guessCatFromCloud(name, type) {
 }
 
 function catName(id) { return CATS.find(c => c.id === id)?.name || id; }
+function fileProject(f) {
+  const k = f.key || '';
+  const m = k.match(/^projects\\/([^/]+)/);
+  if (m) return m[1];
+  return f.project || 'inbox';
+}
 
 function renderCats() {
   const list = document.getElementById('cat-list');
-  list.innerHTML = \`<button onclick="setCat('all')" class="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-white/5 \${state.currentCat==='all'?'bg-pink-500/15 text-pink-300':''}">📁 All (\${state.files.length})</button>\` +
+  const plist = document.getElementById('project-list');
+  const projects = {};
+  state.files.forEach((f) => {
+    const p = fileProject(f);
+    projects[p] = (projects[p] || 0) + 1;
+  });
+  if (plist) {
+    const names = Object.keys(projects).sort();
+    plist.innerHTML = names.map((p) => {
+      const on = state.currentProject === p;
+      return \`<button onclick="setProject('\${p}')" class="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-white/5 \${on?'bg-pink-500/15 text-pink-300':''}">📂 \${p} <span class="opacity-50">\${projects[p]}</span></button>\`;
+    }).join('') || '<div class="text-[10px] text-slate-500 px-2">No project folders yet.</div>';
+  }
+  list.innerHTML = \`<button onclick="setCat('all')" class="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-white/5 \${state.currentCat==='all'&&!state.currentProject?'bg-pink-500/15 text-pink-300':''}">📁 All (\${state.files.length})</button>\` +
     CATS.map(c => {
       const cnt = state.files.filter(f => f.category === c.id).length;
       return \`<button onclick="setCat('\${c.id}')" class="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-white/5 \${state.currentCat===c.id?'bg-pink-500/15 text-pink-300':''}">\${c.icon} \${c.name} <span class="opacity-50">\${cnt}</span></button>\`;
     }).join('');
 }
 
+function setProject(id) {
+  state.currentProject = id;
+  state.currentCat = 'all';
+  document.getElementById('cat-label').textContent = 'Project · ' + id;
+  renderCats();
+  renderFiles();
+}
+
 function setCat(id) {
   state.currentCat = id;
+  state.currentProject = '';
   document.getElementById('cat-label').textContent = id === 'all' ? 'All Files' : catName(id);
   renderCats();
   renderFiles();
 }
 
+async function organizeVaultNow() {
+  addMia('Filing vault into project folders…');
+  showDeployPending('organize_vault');
+  try {
+    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/organize', { method: 'POST' });
+    const rec = await res.json();
+    if (!rec.ok) throw new Error(rec.error || 'organize failed');
+    const lines = Object.entries(rec.projects || {}).map(([k, n]) => k + ': ' + n).join(', ');
+    addMia('Filed ' + rec.moved + ' file(s). ' + lines + '. Live UI left in ui/.');
+    showDeployResult({ ok: true, name: 'organize_vault', url: '', at: new Date().toISOString() });
+    state.files = state.files.filter((f) => !f.key);
+    await loadCloudVault();
+  } catch (e) {
+    addMia('Organize failed: ' + (e.message || e) + '. Deploy Worker v3.3 then try again.');
+    showDeployResult({ ok: false, name: 'organize_vault', error: String(e.message || e), at: new Date().toISOString() });
+  }
+}
+
 function renderFiles() {
   let files = state.files;
-  if (state.currentCat !== 'all') files = files.filter(f => f.category === state.currentCat);
+  if (state.currentProject) files = files.filter(f => fileProject(f) === state.currentProject);
+  else if (state.currentCat !== 'all') files = files.filter(f => f.category === state.currentCat);
   const grid = document.getElementById('file-grid');
   if (!files.length) {
     grid.innerHTML = '<div class="col-span-full text-center text-slate-500 text-xs py-16">No files yet. Drop mixed files on the left — JS, Python, Node, media, docs.</div>';
@@ -2304,6 +2361,7 @@ async function loadCloudVault() {
       const name = (o.customMetadata && o.customMetadata.originalName) || o.key.split('/').pop();
         const ctype = (o.httpMetadata && o.httpMetadata.contentType) || 'application/octet-stream';
         const cat = (o.customMetadata && o.customMetadata.category) || overrides[o.key] || guessCatFromCloud(name, ctype);
+        const project = o.project || (o.key || '').split('/')[1];
       state.files.push({
         id: 'r2-' + o.key,
         key: o.key,
@@ -2311,6 +2369,7 @@ async function loadCloudVault() {
         type: ctype,
         size: o.size || 0,
         category: cat,
+        project,
         url: WORKER_BASE.replace(/\\/$/, '') + '/files?key=' + encodeURIComponent(o.key),
         status: 'cloud',
       });

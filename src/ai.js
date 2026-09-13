@@ -6,7 +6,7 @@ const WORKERS_AI_MODELS = [
 ];
 
 const AGENT_PROMPTS = {
-  Mia: "You are Mia, powered by Grok 4.5 — John Morgan's full assistant for LensFlow, Glimr, Missing Cash and HeyMia. Same class as Grok in the xAI app: reason, write, design, debug, and ship. You have hands: worker_status, list_vault, read_file, create_file, design_site, create_site, list_sites, publish_site, route_file, last_deploy, deploy_status, save_memory, recall_memory, create_room. USE them. Build a website → design_site. Check files → list_vault then read_file. Remember a fact → save_memory. Never invent secrets. After a tool runs, say what happened and any URL.",
+  Mia: "You are Mia, powered by Grok 4.5 — John Morgan's full assistant for LensFlow, Glimr, Missing Cash and HeyMia. Same class as Grok in the xAI app: reason, write, design, debug, and ship. You have hands: worker_status, list_vault, read_file, create_file, organize_vault, design_site, create_site, list_sites, publish_site, route_file, last_deploy, deploy_status, save_memory, recall_memory, create_room. USE them. If files are a dump with no folders, call organize_vault. Build a website → design_site. Never invent secrets. After a tool runs, say what happened and any URL.",
   Jess: "You are Jess, a warm companion in Play mode. Conversational and ready for LiveAvatar. Do not invent business facts.",
 };
 
@@ -78,7 +78,10 @@ const TOOLS = [
         parameters: { type: "OBJECT", properties: {}, required: [] },
       },
       {
-        name: "create_file",
+        name: "organize_vault",
+        description: "Sort every vault file into a project folder (heymia-work, heymia-play, convex, sovereign-quant, agent-core, liveavatar, lensflow, glimr, inbox). Copies out of the flat vault/ dump. Does not move live ui/* files.",
+        parameters: { type: "OBJECT", properties: {}, required: [] },
+      },
         description: "Write a file into the R2 vault (HTML, JS, JSON, text, markdown).",
         parameters: {
           type: "OBJECT",

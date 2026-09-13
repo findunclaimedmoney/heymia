@@ -2,8 +2,9 @@ import workHtml from "./ui/work.html.js";
 import { handleAgentChat, routeFile, grokTroubleshoot } from "./ai.js";
 import { handleUiAdmin, matchHtmlPage, serveUI, unwrapHtml } from "./routing.js";
 import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound, designSiteHtml } from "./sites.js";
+import { classifyProject, organizeVault } from "./projects.js";
 
-const VERSION = "3.2.0";
+const VERSION = "3.3.0";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -82,7 +83,8 @@ async function listR2Files(env, prefix = "") {
     name: o.key.replace(/^files\//, ""),
     size: o.size,
     uploaded: o.uploaded,
-    category: o.key.startsWith("ui/") ? "ui" : o.key.startsWith("sites/") ? "sites" : "vault",
+    category: o.key.startsWith("ui/") ? "ui" : o.key.startsWith("sites/") ? "sites" : o.key.startsWith("projects/") ? "project" : "vault",
+    project: classifyProject(o.key, o.key.split("/").pop()),
   }));
 }
 
@@ -294,6 +296,7 @@ export default {
             args = args || {};
             if (name === "worker_status") return statusPayload(env);
             if (name === "list_vault") return { files: await listR2Files(env, args.prefix || "") };
+            if (name === "organize_vault") return organizeVault(env);
             if (name === "publish_site") {
               if (!vaultBound(env)) return { error: "VAULT unbound" };
               return publishSite(env, args);
@@ -396,6 +399,21 @@ export default {
           const rec = await runDeploy(env, await request.json());
           return jsonR(rec, rec.ok ? 200 : 400);
         }
+      }
+
+      if (path === "/api/organize" && method === "POST") {
+        if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
+        return jsonR(await organizeVault(env));
+      }
+      if (path === "/api/organize" && method === "GET") {
+        const files = vaultBound(env) ? await listR2Files(env) : [];
+        const plan = {};
+        for (const f of files) {
+          const p = f.project || "inbox";
+          plan[p] = plan[p] || [];
+          plan[p].push(f.key);
+        }
+        return jsonR({ ok: true, plan, files: files.length });
       }
 
       if (path === "/api/grok" && method === "GET") {
