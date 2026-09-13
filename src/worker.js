@@ -1,9 +1,9 @@
 import workHtml from "./ui/work.html.js";
 import { handleAgentChat, routeFile } from "./ai.js";
-import { handleUiAdmin, matchHtmlPage, serveUI } from "./routing.js";
+import { handleUiAdmin, matchHtmlPage, serveUI, unwrapHtml } from "./routing.js";
 import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound, designSiteHtml } from "./sites.js";
 
-const VERSION = "3.1.0";
+const VERSION = "3.1.1";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -177,10 +177,14 @@ async function statusPayload(env) {
 
 async function putVaultFile(env, name, body, type, category) {
   const safe = String(name || "upload.bin").replace(/^\/+/, "").replace(/\.\./g, "");
+  let payload = body;
+  if (/\.html?$/i.test(safe) || (type && String(type).includes("html"))) {
+    payload = unwrapHtml(body);
+  }
   if (vaultBound(env)) {
     const key = "files/" + safe;
-    await env.VAULT.put(key, body, { httpMetadata: { contentType: type || mimeOf(safe) } });
-    return { ok: true, key, name: safe, size: body.byteLength || body.length || 0, category: category || "vault" };
+    await env.VAULT.put(key, payload, { httpMetadata: { contentType: type || mimeOf(safe) } });
+    return { ok: true, key, name: safe, size: payload.byteLength || payload.length || 0, category: category || "vault" };
   }
   if (env.MEMORY) {
     const id = crypto.randomUUID();
