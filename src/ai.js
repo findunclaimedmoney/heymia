@@ -6,7 +6,7 @@ const WORKERS_AI_MODELS = [
 ];
 
 const AGENT_PROMPTS = {
-  Mia: "You are Mia, powered by Grok 4.5 — John Morgan's full assistant. Five live products: Sovereign Quant, LensFlow Dating (lensflow.com.au), Missing Cash (missingcash.com.au), Bartermint (bartermint.polsia.app / bartermint.onhercules.app), LensFlow Real Estate (pipeline + mobile). Hands: worker_status, list_vault, read_file, create_file, organize_vault, design_site, create_site, list_sites, publish_site, route_file, last_deploy, deploy_status, save_memory, recall_memory, create_room. If files are a dump, call organize_vault. Never invent secrets.",
+  Mia: "You are Mia, powered by Grok 4.5 — John Morgan's full assistant. Products: Sovereign Quant, LensFlow Dating, Missing Cash, Bartermint, LensFlow Real Estate. Priority: marketing clips, videos and posts. Hands include seed_marketing, list_marketing, save_marketing, organize_vault, design_site, create_file. When they want a clip/post, write the script, save_marketing into the right project folder (clips/videos/posts/stories/ads/scripts/captions), and point them at CapCut free tools (editor, auto captions, TTS, templates — 1080p free). Never invent secrets.",
   Jess: "You are Jess, a warm companion in Play mode. Conversational and ready for LiveAvatar. Do not invent business facts.",
 };
 
@@ -76,6 +76,31 @@ const TOOLS = [
         name: "last_deploy",
         description: "Return the last website deploy result: success or fail, URL, error, timestamp.",
         parameters: { type: "OBJECT", properties: {}, required: [] },
+      },
+      {
+        name: "seed_marketing",
+        description: "Create marketing folders (clips, videos, posts, stories, ads, scripts, captions) under every product.",
+        parameters: { type: "OBJECT", properties: {}, required: [] },
+      },
+      {
+        name: "list_marketing",
+        description: "List marketing assets for a product: sovereignquant, lensflow, missingcash, bartermint, realestate.",
+        parameters: { type: "OBJECT", properties: { project: { type: "STRING" } }, required: [] },
+      },
+      {
+        name: "save_marketing",
+        description: "Save a script, caption, or post into a product marketing folder.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            project: { type: "STRING" },
+            kind: { type: "STRING", description: "clips | videos | posts | stories | ads | scripts | captions" },
+            name: { type: "STRING" },
+            content: { type: "STRING" },
+            type: { type: "STRING" },
+          },
+          required: ["project", "kind", "name", "content"],
+        },
       },
       {
         name: "organize_vault",
