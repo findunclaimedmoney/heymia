@@ -45,6 +45,8 @@ const TOOLS = [
         description: "List websites already published on this Worker.",
         parameters: { type: "OBJECT", properties: {}, required: [] },
       },
+      {
+        name: "publish_site",
         description: "Publish a static website to /s/{slug}/ on this Worker.",
         parameters: {
           type: "OBJECT",

@@ -338,6 +338,8 @@ export default {
         await writeLastDeploy(env, { ok: true, action: "design_site", name: rec.slug, url: rec.url, at: new Date().toISOString() });
         return jsonR(rec);
       }
+
+      if (path.startsWith("/api/sites")) {
         if (!vaultBound(env)) return jsonR({ error: "VAULT missing. Cannot publish sites." }, 503);
         if (path === "/api/sites" && method === "GET") return jsonR({ ok: true, sites: await listSites(env) });
         if (path === "/api/sites" && method === "POST") {

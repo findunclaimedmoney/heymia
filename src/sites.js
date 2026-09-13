@@ -61,7 +61,10 @@ export function designSiteHtml({ name, brief, tagline, style, industry } = {}) {
     legal: ["Practice", "People", "Enquire"],
   };
   const feats = packs[ind] || packs.studio;
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&", "<": "<", ">": ">", '"': """, "'": "&#39;" }[c]));
+  function esc(s) {
+    const map = { "&": "&" + "amp;", "<": "&" + "lt;", ">": "&" + "gt;", '"': "&" + "quot;", "'": "&#39;" };
+    return String(s).replace(/[&<>"']/g, (c) => map[c]);
+  }
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "site";
   return `<!doctype html>
 <html lang="en">
@@ -131,6 +134,8 @@ export function extractHtmlDocument(text) {
 export function defaultSiteHtml(name, tagline) {
   return designSiteHtml({ name, tagline, brief: tagline, style: "ink" });
 }
+
+export async function listSites(env) {
   const listed = await env.VAULT.list({ prefix: "sites/", limit: 1000 });
   const slugs = {};
   for (const o of listed.objects || []) {
