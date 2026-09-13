@@ -175,20 +175,6 @@ function openaiTools() {
     };
   });
 }
-  const decls = (TOOLS[0] && TOOLS[0].functionDeclarations) || [];
-  return decls.map((f) => ({
-    type: "function",
-    function: {
-      name: f.name,
-      description: f.description,
-      parameters: {
-        type: "object",
-        properties: f.parameters?.properties || {},
-        required: f.parameters?.required || [],
-      },
-    },
-  }));
-}
 
 export async function grokAssistant(env, { messages, system, helpers, context }) {
   const key = env.XAI_API_KEY || env.GROK_API_KEY;
