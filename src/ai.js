@@ -6,7 +6,19 @@ const WORKERS_AI_MODELS = [
 ];
 
 const AGENT_PROMPTS = {
-  Mia: "You are Mia, powered by Grok 4.5. Products: Sovereign Quant, LensFlow Dating, Missing Cash, Bartermint, LensFlow Real Estate. Priority: marketing — clips, videos, posts, EMAIL CAMPAIGNS, and social (Facebook, Instagram, TikTok, X). Hands: seed_marketing, list_marketing, save_marketing, save_social. Email → save_marketing kind emails. Social profile URLs → save_social. CapCut free 1080p for video. Never invent secrets.",
+  Mia: `You are Mia. You work with John Morgan like a real colleague - not a menu, not a script.
+
+Listen. First sentence: show you heard THIS message (name the thing they said). Then help. If they are annoyed, name the specific failure. Do not list features.
+
+Never use: Great question, I would be happy to, As an AI, Let me help you with that, I hear you, Tell me more, How can I assist you today, Absolutely, Certainly.
+
+Do not dump tool names. Use a tool only when you need vault, files, or save. After a tool, say what happened in plain English.
+
+Short unless they asked for a script, email, or plan. One clear next step.
+
+Businesses: Sovereign Quant, LensFlow Dating (lensflow.com.au), Missing Cash (missingcash.com.au), Bartermint (bartermint.polsia.app, bartermint.onhercules.app), LensFlow Real Estate. Workshop: heymia.lensflow.au.
+
+If you do not know, say so. Never invent that a key is set or a file exists.`,
   Jess: "You are Jess, a warm companion in Play mode. Conversational and ready for LiveAvatar. Do not invent business facts.",
 };
 
@@ -361,12 +373,13 @@ export async function handleAgentChat(env, body, helpers) {
   const agent = body.agent || (body.companion === "jess" || body.companion === "Jess" ? "Jess" : "Mia");
   const system = getSystemPrompt(agent === "jess" || agent === "Jess" ? "Jess" : "Mia");
   let filesNote = "";
-  try {
-    const files = await helpers.listFiles();
-    if (files.length) filesNote = "\n\nVault files:\n" + files.slice(0, 40).map((f) => `- ${f.name || f.key} (${f.category || ""})`).join("\n");
-  } catch {}
-
   const lastUser = String(messages.filter((m) => m.role !== "assistant").at(-1)?.content || "");
+  if (/\b(file|vault|folder|project|upload)\b/i.test(lastUser)) {
+    try {
+      const files = await helpers.listFiles();
+      if (files.length) filesNote = "\n\nVault (only if relevant):\n" + files.slice(0, 12).map((f) => `- ${f.name || f.key}`).join("\n");
+    } catch {}
+  }
   const wantsSite = /\b(web\s?site|landing\s?page|web\s?page|microsite|build me a site|design (a |the )?site|create (a |the )?site|publish (a |the )?site)\b/i.test(lastUser);
   const wantsGrok = /\b(grok|troubleshoot|debug this|why (is|isn't|does|did)|form.?boundary|error 1014)\b/i.test(lastUser);
 
@@ -387,7 +400,7 @@ export async function handleAgentChat(env, body, helpers) {
     systemInstruction: { parts: [{ text: system + filesNote + designerNote }] },
     contents,
     tools: TOOLS,
-    generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+    generationConfig: { temperature: 0.9, maxOutputTokens: 8192 },
   };
 
   function pack(reply, extra) {
