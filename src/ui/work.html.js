@@ -300,6 +300,23 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
               </div>
               <canvas id="mkt-canvas" width="1080" height="1080" class="w-full rounded-xl border border-white/10 bg-black"></canvas>
               <div id="mkt-status" class="text-[11px] text-slate-400"></div>
+              <div class="pt-3 border-t border-white/10 space-y-2">
+                <div class="text-xs font-bold">Email campaign</div>
+                <input id="mkt-email-to" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs" placeholder="to@example.com (optional)">
+                <input id="mkt-email-subject" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs" placeholder="Subject">
+                <textarea id="mkt-email-body" rows="5" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs" placeholder="Email body + CTA link"></textarea>
+                <div class="flex gap-2">
+                  <button onclick="mktWriteEmail()" class="flex-1 py-2 rounded-xl bg-pink-600 text-xs font-bold">Write email</button>
+                  <button onclick="mktSaveEmail()" class="flex-1 py-2 rounded-xl glass-light text-xs font-bold">Save campaign</button>
+                  <button onclick="mktMailTo()" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Open mail</button>
+                </div>
+              </div>
+              <div class="pt-3 border-t border-white/10 space-y-2">
+                <div class="text-xs font-bold">Social profiles on this website</div>
+                <div id="mkt-social-fields" class="grid grid-cols-1 gap-1"></div>
+                <button onclick="mktSaveSocial()" class="w-full py-2 rounded-xl bg-emerald-600 text-xs font-bold">Save social links</button>
+                <div id="mkt-share" class="flex flex-wrap gap-2"></div>
+              </div>
             </div>
             <div class="space-y-3">
               <div class="glass rounded-2xl p-4 border border-white/10">
@@ -1535,11 +1552,13 @@ async function renderProducts() {
   grid.innerHTML = remote.map((p) => {
     const n = p.files != null ? p.files : state.files.filter((f) => fileProject(f) === p.slug).length;
     const links = (p.urls || []).map((u) => \`<a class="text-pink-300 underline" href="\${u}" target="_blank" rel="noopener">\${u.replace(/^https?:\\/\\//,'')}</a>\`).join('<br>');
+    const social = ['facebook','instagram','tiktok','x'].map((id) => \`<span class="text-[9px] uppercase tracking-wide text-slate-500">\${id}</span>\`).join(' · ');
     return \`<button onclick="openProduct('\${p.slug}')" class="text-left glass rounded-2xl p-4 border border-white/10 hover:border-pink-500/40">
       <div class="text-sm font-bold">\${p.name}</div>
       <div class="text-[11px] text-slate-400 mt-1">\${p.blurb || ''}</div>
       <div class="text-[10px] text-pink-300 mt-2">\${n} file\${n===1?'':'s'}</div>
       <div class="text-[10px] mt-2 leading-relaxed">\${links || 'No live URL yet'}</div>
+      <div class="mt-2">\${social}</div>
     </button>\`;
   }).join('');
 }
@@ -2028,6 +2047,11 @@ const MKT_CAPCUT = [
 const MKT_KINDS = [
   { id:'clips', name:'Clips' }, { id:'videos', name:'Videos' }, { id:'posts', name:'Posts' },
   { id:'stories', name:'Stories' }, { id:'ads', name:'Ads' }, { id:'scripts', name:'Scripts' }, { id:'captions', name:'Captions' },
+  { id:'emails', name:'Emails' }, { id:'social', name:'Social' },
+];
+const MKT_SOCIAL = [
+  { id:'facebook', name:'Facebook' }, { id:'instagram', name:'Instagram' }, { id:'tiktok', name:'TikTok' },
+  { id:'x', name:'X' }, { id:'linkedin', name:'LinkedIn' }, { id:'youtube', name:'YouTube' },
 ];
 state.mktProject = 'lensflow';
 state.mktKind = 'clips';
@@ -2039,7 +2063,10 @@ function renderMarketing() {
   if (pbox) pbox.innerHTML = PRODUCTS_UI.map((p) => \`<button onclick="state.mktProject='\${p.slug}';renderMarketing();mktList()" class="px-2 py-1 rounded-lg text-[10px] font-bold \${state.mktProject===p.slug?'tab-active':'glass-light'}">\${p.name}</button>\`).join('');
   if (kbox) kbox.innerHTML = MKT_KINDS.map((k) => \`<button onclick="state.mktKind='\${k.id}';renderMarketing();mktList()" class="px-2 py-1 rounded-md text-[10px] \${state.mktKind===k.id?'bg-pink-600/80':'glass-light'}">\${k.name}</button>\`).join('');
   if (cbox) cbox.innerHTML = MKT_CAPCUT.map((t) => \`<a class="glass-light rounded-xl p-2 block hover:border-pink-500/40 border border-transparent" href="\${t.url}" target="_blank" rel="noopener"><div class="text-[11px] font-bold">\${t.name}</div><div class="text-[10px] text-slate-500">\${t.use}</div></a>\`).join('');
+  const sbox = document.getElementById('mkt-social-fields');
+  if (sbox) sbox.innerHTML = MKT_SOCIAL.map((s) => \`<input id="soc-\${s.id}" class="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-[11px]" placeholder="\${s.name} URL">\`).join('');
   mktList();
+  mktLoadSocial();
 }
 
 async function seedMarketingNow() {
@@ -2053,6 +2080,90 @@ async function seedMarketingNow() {
   } catch (e) {
     if (st) st.textContent = 'Need Worker v3.5 — ' + (e.message || e);
   }
+}
+
+async function mktLoadSocial() {
+  try {
+    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/marketing?project=' + encodeURIComponent(state.mktProject));
+    const d = await res.json();
+    const links = d.links || {};
+    MKT_SOCIAL.forEach((s) => {
+      const el = document.getElementById('soc-' + s.id);
+      if (el) el.value = links[s.id] || '';
+    });
+    mktRenderShare(links);
+  } catch (e) {}
+}
+
+function mktRenderShare(links) {
+  const box = document.getElementById('mkt-share');
+  if (!box) return;
+  links = links || {};
+  const p = PRODUCTS_UI.find((x) => x.slug === state.mktProject) || {};
+  const page = (p.urls && p.urls[0]) || 'https://heymia.lensflow.au/work';
+  const text = (document.getElementById('mkt-script') && document.getElementById('mkt-script').value.slice(0, 180)) || p.name || '';
+  const share = {
+    facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(page),
+    x: 'https://twitter.com/intent/tweet?url=' + encodeURIComponent(page) + '&text=' + encodeURIComponent(text),
+    linkedin: 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(page),
+    instagram: links.instagram || 'https://www.instagram.com/',
+    tiktok: links.tiktok || 'https://www.tiktok.com/upload?lang=en',
+    youtube: links.youtube || 'https://studio.youtube.com/',
+  };
+  box.innerHTML = MKT_SOCIAL.map((s) => {
+    const href = links[s.id] || share[s.id];
+    return \`<a class="px-2 py-1 rounded-lg glass-light text-[10px] font-bold" href="\${href}" target="_blank" rel="noopener">\${s.name}</a>\`;
+  }).join('');
+}
+
+async function mktSaveSocial() {
+  const links = {};
+  MKT_SOCIAL.forEach((s) => {
+    const el = document.getElementById('soc-' + s.id);
+    if (el && el.value.trim()) links[s.id] = el.value.trim();
+  });
+  const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/marketing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'social', project: state.mktProject, links }) });
+  const d = await res.json();
+  document.getElementById('mkt-status').textContent = d.ok ? 'Social links saved on the website' : (d.error || 'fail');
+  addMia(d.ok ? 'Social links saved for ' + state.mktProject : 'Social save failed');
+  mktRenderShare(links);
+}
+
+async function mktWriteEmail() {
+  const brief = ((document.getElementById('mkt-brief') && document.getElementById('mkt-brief').value) || document.getElementById('mkt-email-subject').value || 'promo').trim();
+  const prompt = 'Write a marketing EMAIL for ' + state.mktProject + '. Brief: ' + brief + '. Format exactly:\\nSUBJECT:\\nBODY:\\nCTA:';
+  document.getElementById('mkt-status').textContent = 'Writing email…';
+  try {
+    const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: prompt, messages:[{role:'user', content: prompt}], agent:'Mia' }) });
+    const d = await res.json();
+    const t = d.reply || d.response || '';
+    const sub = (t.match(/SUBJECT:\\s*(.+)/i) || [])[1] || brief;
+    document.getElementById('mkt-email-subject').value = sub.trim();
+    document.getElementById('mkt-email-body').value = t.replace(/^SUBJECT:.*\\n/i, '').trim();
+    document.getElementById('mkt-status').textContent = 'Email draft ready.';
+  } catch (e) {
+    document.getElementById('mkt-status').textContent = String(e.message || e);
+  }
+}
+
+async function mktSaveEmail() {
+  const subject = document.getElementById('mkt-email-subject').value || 'Campaign';
+  const body = document.getElementById('mkt-email-body').value || '';
+  const to = document.getElementById('mkt-email-to').value || '';
+  const content = 'To: ' + to + '\\nSubject: ' + subject + '\\n\\n' + body;
+  const name = 'email-' + Date.now() + '.txt';
+  const res = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/api/marketing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ project: state.mktProject, kind: 'emails', name, content, type: 'text/plain;charset=UTF-8' }) });
+  const d = await res.json();
+  document.getElementById('mkt-status').textContent = d.ok ? 'Saved ' + d.key : (d.error || 'fail');
+  addMia(d.ok ? 'Email campaign filed in ' + d.key : 'Email save failed');
+  mktList();
+}
+
+function mktMailTo() {
+  const to = document.getElementById('mkt-email-to').value || '';
+  const subject = document.getElementById('mkt-email-subject').value || '';
+  const body = document.getElementById('mkt-email-body').value || '';
+  location.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
 }
 
 async function mktList() {
