@@ -38,7 +38,7 @@ async function listKvFiles(e, c) {
   }
   return f;
 }
-async function listR2Files(env, prefix = "files/") {
+async function listR2Files(env, prefix = "") {
   if (!vaultBound(env)) return [];
   const listed = await env.VAULT.list({ prefix, limit: 1000 });
   return (listed.objects || []).map((o) => ({
@@ -46,8 +46,100 @@ async function listR2Files(env, prefix = "files/") {
     name: o.key.replace(/^files\//, ""),
     size: o.size,
     uploaded: o.uploaded,
-    category: "vault",
+    category: o.key.startsWith("ui/") ? "ui" : o.key.startsWith("sites/") ? "sites" : "vault",
   }));
+}
+
+const LAST_DEPLOY_KEY = "deploy/last.json";
+
+async function readLastDeploy(env) {
+  try {
+    if (vaultBound(env)) {
+      const obj = await env.VAULT.get(LAST_DEPLOY_KEY);
+      if (obj) return JSON.parse(await obj.text());
+    }
+    if (env.MEMORY) {
+      const v = await env.MEMORY.get("deploy:last");
+      if (v) return JSON.parse(v);
+    }
+  } catch {}
+  return null;
+}
+
+async function writeLastDeploy(env, rec) {
+  const body = JSON.stringify(rec);
+  if (vaultBound(env)) {
+    await env.VAULT.put(LAST_DEPLOY_KEY, body, { httpMetadata: { contentType: "application/json" } });
+  }
+  if (env.MEMORY) await env.MEMORY.put("deploy:last", body);
+}
+
+async function resolveVaultKey(env, key) {
+  if (!key) return null;
+  const raw = String(key).replace(/^\//, "");
+  const tries = [raw];
+  if (!raw.startsWith("files/") && !raw.startsWith("ui/") && !raw.startsWith("vault/")) {
+    tries.push("files/" + raw, "vault/" + raw, "ui/" + raw);
+  }
+  for (const k of tries) {
+    const obj = await env.VAULT.get(k);
+    if (obj) return { key: k, obj };
+  }
+  return null;
+}
+
+async function runDeploy(env, body) {
+  const started = new Date().toISOString();
+  const action = body.action || "log";
+  const rec = {
+    ok: false,
+    action,
+    name: body.name || body.slug || body.key || "",
+    url: body.url || "",
+    error: body.error || "",
+    at: started,
+    verified: false,
+  };
+  try {
+    if (action === "log") {
+      rec.ok = body.ok !== false && !body.error;
+      rec.at = body.at || started;
+      await writeLastDeploy(env, rec);
+      return rec;
+    }
+    if (action === "publish_site" || action === "site") {
+      if (!vaultBound(env)) throw new Error("VAULT unbound - cannot publish");
+      const pub = await publishSite(env, body);
+      rec.ok = true;
+      rec.url = pub.url;
+      rec.name = pub.slug;
+    } else if (action === "activate_ui" || action === "ui") {
+      if (!vaultBound(env)) throw new Error("VAULT unbound - cannot activate UI");
+      const target = String(body.target || "work").toLowerCase();
+      if (!["work", "play", "landing", "admin", "studio"].includes(target)) throw new Error("invalid target");
+      const found = await resolveVaultKey(env, body.key);
+      if (!found) throw new Error("source key not found in R2: " + (body.key || "(empty)"));
+      const activeKey = "ui/" + target + "-active.html";
+      await env.VAULT.put(activeKey, await found.obj.arrayBuffer(), {
+        httpMetadata: { contentType: "text/html;charset=UTF-8" },
+        customMetadata: { sourceKey: found.key, activatedAt: started },
+      });
+      const domain = env.PUBLIC_DOMAIN || "";
+      rec.ok = true;
+      rec.name = found.key;
+      rec.url = domain + (target === "play" ? "/play" : target === "work" ? "/work" : "/" + target);
+    } else {
+      throw new Error("unknown deploy action: " + action);
+    }
+    rec.at = new Date().toISOString();
+    rec.error = "";
+  } catch (e) {
+    rec.ok = false;
+    rec.error = String(e.message || e);
+    rec.at = new Date().toISOString();
+  }
+  await writeLastDeploy(env, rec);
+  return rec;
 }
 
 async function statusPayload(env) {
@@ -60,6 +152,7 @@ async function statusPayload(env) {
   return {
     ok: vault === "bound", status: "ok", service: "heymia", version: VERSION,
     ai_model: env.GEMINI_MODEL || "gemini-3.8-flash", vault,
+    last_deploy: await readLastDeploy(env),
     ai: env.AI ? "bound" : "missing",
     gemini: env.GEMINI_API_KEY || env.GEMINI ? "set" : "unset",
     liveavatar: env.LIVEAVATAR_API_KEY || env.LIVEAVATAR ? "set" : "unset",
@@ -142,12 +235,13 @@ export default {
           runTool: async (name, args) => {
             args = args || {};
             if (name === "worker_status") return statusPayload(env);
-            if (name === "list_vault") return { files: await listR2Files(env, args.prefix || "files/") };
+            if (name === "list_vault") return { files: await listR2Files(env, args.prefix || "") };
             if (name === "publish_site") {
               if (!vaultBound(env)) return { error: "VAULT unbound" };
               return publishSite(env, args);
             }
             if (name === "route_file") return routeFile(args.fileName, args.fileType, args.category);
+            if (name === "last_deploy") return (await readLastDeploy(env)) || { ok: false, error: "no deploys yet" };
             if (name === "create_room") {
               if (!vaultBound(env)) return { error: "VAULT unbound" };
               const rec = { id: "room-" + crypto.randomUUID().slice(0, 8), name: args.name, theme: args.theme || "", prompt: args.prompt || "", created: new Date().toISOString() };
@@ -167,9 +261,9 @@ export default {
         if (method === "GET") {
           const key = url.searchParams.get("key");
           if (key && vaultBound(env)) {
-            const obj = await env.VAULT.get(key.startsWith("files/") ? key : "files/" + key);
-            if (!obj) return jsonR({ error: "not found" }, 404);
-            return new Response(obj.body, { headers: { ...corsH, "Content-Type": obj.httpMetadata && obj.httpMetadata.contentType || mimeOf(key) } });
+            const found = await resolveVaultKey(env, key);
+            if (!found) return jsonR({ error: "not found" }, 404);
+            return new Response(found.obj.body, { headers: { ...corsH, "Content-Type": found.obj.httpMetadata && found.obj.httpMetadata.contentType || mimeOf(found.key) } });
           }
           const cat = url.searchParams.get("category");
           const files = vaultBound(env) ? await listR2Files(env) : await listKvFiles(env, cat);
@@ -193,6 +287,13 @@ export default {
           if (!key || !vaultBound(env)) return jsonR({ error: "key required" }, 400);
           await env.VAULT.delete(key.startsWith("files/") ? key : "files/" + key);
           return jsonR({ ok: true, deleted: key });
+        }
+      }
+      if (path === "/api/deploy" || path === "/deploy-status") {
+        if (method === "GET") return jsonR({ ok: true, last: await readLastDeploy(env), worker: await statusPayload(env) });
+        if (method === "POST") {
+          const rec = await runDeploy(env, await request.json());
+          return jsonR(rec, rec.ok ? 200 : 400);
         }
       }
       if (path.startsWith("/api/sites")) {
