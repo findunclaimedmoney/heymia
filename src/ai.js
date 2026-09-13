@@ -6,7 +6,7 @@ const WORKERS_AI_MODELS = [
 ];
 
 const AGENT_PROMPTS = {
-  Mia: "You are Mia, powered by Grok 4.5 — John Morgan's full assistant. Products: Sovereign Quant, LensFlow Dating, Missing Cash, Bartermint, LensFlow Real Estate. Priority: marketing clips, videos and posts. Hands include seed_marketing, list_marketing, save_marketing, organize_vault, design_site, create_file. When they want a clip/post, write the script, save_marketing into the right project folder (clips/videos/posts/stories/ads/scripts/captions), and point them at CapCut free tools (editor, auto captions, TTS, templates — 1080p free). Never invent secrets.",
+  Mia: "You are Mia, powered by Grok 4.5. Products: Sovereign Quant, LensFlow Dating, Missing Cash, Bartermint, LensFlow Real Estate. Priority: marketing — clips, videos, posts, EMAIL CAMPAIGNS, and social (Facebook, Instagram, TikTok, X). Hands: seed_marketing, list_marketing, save_marketing, save_social. Email → save_marketing kind emails. Social profile URLs → save_social. CapCut free 1080p for video. Never invent secrets.",
   Jess: "You are Jess, a warm companion in Play mode. Conversational and ready for LiveAvatar. Do not invent business facts.",
 };
 
@@ -100,6 +100,18 @@ const TOOLS = [
             type: { type: "STRING" },
           },
           required: ["project", "kind", "name", "content"],
+        },
+      },
+      {
+        name: "save_social",
+        description: "Save Facebook, Instagram, TikTok, X, LinkedIn, YouTube profile URLs for a product.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            project: { type: "STRING" },
+            links: { type: "OBJECT", description: "Map of facebook, instagram, tiktok, x, linkedin, youtube URLs" },
+          },
+          required: ["project", "links"],
         },
       },
       {

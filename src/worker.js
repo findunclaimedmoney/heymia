@@ -3,9 +3,9 @@ import { handleAgentChat, routeFile, grokTroubleshoot } from "./ai.js";
 import { handleUiAdmin, matchHtmlPage, serveUI, unwrapHtml } from "./routing.js";
 import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound, designSiteHtml } from "./sites.js";
 import { classifyProject, organizeVault, listProducts, seedProducts } from "./projects.js";
-import { seedMarketing, listMarketing, saveMarketing, CAPCUT_FREE, MARKETING_KINDS } from "./marketing.js";
+import { seedMarketing, listMarketing, saveMarketing, CAPCUT_FREE, MARKETING_KINDS, SOCIAL, saveSocial, readSocial, shareUrl } from "./marketing.js";
 
-const VERSION = "3.5.0";
+const VERSION = "3.6.0";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -301,6 +301,7 @@ export default {
             if (name === "seed_marketing") return seedMarketing(env);
             if (name === "list_marketing") return listMarketing(env, args.project);
             if (name === "save_marketing") return saveMarketing(env, args);
+            if (name === "save_social") return saveSocial(env, args.project, args.links);
             if (name === "publish_site") {
               if (!vaultBound(env)) return { error: "VAULT unbound" };
               return publishSite(env, args);
@@ -433,16 +434,24 @@ export default {
       if (path === "/api/marketing" && method === "GET") {
         if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
         const project = url.searchParams.get("project") || "";
-        return jsonR({ ...(await listMarketing(env, project)), capcut: CAPCUT_FREE, kinds: MARKETING_KINDS });
+        return jsonR({ ...(await listMarketing(env, project)), capcut: CAPCUT_FREE, kinds: MARKETING_KINDS, social: SOCIAL, links: project ? await readSocial(env, project) : {} });
       }
       if (path === "/api/marketing" && method === "POST") {
         if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
         const body = await request.json().catch(() => ({}));
-        if (body.action === "seed" || !body.name) {
+        if (body.action === "seed" || !body.name && !body.links && body.action !== "social") {
           const mkt = await seedMarketing(env);
           return jsonR(mkt);
         }
+        if (body.action === "social" || body.links) {
+          return jsonR(await saveSocial(env, body.project, body.links));
+        }
         return jsonR(await saveMarketing(env, body));
+      }
+      if (path === "/api/social" && method === "GET") {
+        if (!vaultBound(env)) return jsonR({ links: {} });
+        const project = url.searchParams.get("project") || "";
+        return jsonR({ ok: true, project, networks: SOCIAL, links: await readSocial(env, project), share: SOCIAL.map((s) => ({ ...s, share: shareUrl(s.id, url.searchParams.get("page") || "", url.searchParams.get("text") || "") })) });
       }
 
       if (path === "/api/grok" && method === "GET") {

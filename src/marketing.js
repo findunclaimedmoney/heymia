@@ -8,6 +8,8 @@ export const MARKETING_KINDS = [
   { id: "ads", name: "Ads", hint: "Paid creative" },
   { id: "scripts", name: "Scripts", hint: "Voiceover + shot list" },
   { id: "captions", name: "Captions", hint: "SRT / on-screen text" },
+  { id: "emails", name: "Email campaigns", hint: "Subject + body + CTA" },
+  { id: "social", name: "Social", hint: "Facebook, Instagram, TikTok, X links" },
 ];
 
 export const CAPCUT_FREE = [
@@ -24,6 +26,49 @@ export const CAPCUT_FREE = [
   { name: "Noise reduction", url: "https://www.capcut.com/tools/noise-reduction", use: "Clean audio" },
   { name: "Video enhancer", url: "https://www.capcut.com/tools/video-enhancer", use: "Sharpen / upscale 1080p" },
 ];
+
+export const SOCIAL = [
+  { id: "facebook", name: "Facebook" },
+  { id: "instagram", name: "Instagram" },
+  { id: "tiktok", name: "TikTok" },
+  { id: "x", name: "X / Twitter" },
+  { id: "linkedin", name: "LinkedIn" },
+  { id: "youtube", name: "YouTube" },
+];
+
+export function shareUrl(network, page, text) {
+  const u = encodeURIComponent(page || "https://heymia.lensflow.au/work");
+  const t = encodeURIComponent(text || "");
+  if (network === "facebook") return "https://www.facebook.com/sharer/sharer.php?u=" + u;
+  if (network === "x") return "https://twitter.com/intent/tweet?url=" + u + "&text=" + t;
+  if (network === "linkedin") return "https://www.linkedin.com/sharing/share-offsite/?url=" + u;
+  if (network === "tiktok") return "https://www.tiktok.com/upload?lang=en";
+  if (network === "youtube") return "https://studio.youtube.com/";
+  return "https://www.instagram.com/";
+}
+
+export async function readSocial(env, project) {
+  if (!env.VAULT || !project) return {};
+  const obj = await env.VAULT.get("projects/" + project + "/marketing/social/links.json");
+  if (!obj) return {};
+  try {
+    return JSON.parse(await obj.text());
+  } catch {
+    return {};
+  }
+}
+
+export async function saveSocial(env, project, links) {
+  if (!env.VAULT) return { ok: false, error: "VAULT unbound" };
+  const key = "projects/" + project + "/marketing/social/links.json";
+  const clean = {};
+  for (const s of SOCIAL) {
+    const v = String((links || {})[s.id] || "").trim();
+    if (v) clean[s.id] = v;
+  }
+  await env.VAULT.put(key, JSON.stringify(clean, null, 2), { httpMetadata: { contentType: "application/json" } });
+  return { ok: true, project, links: clean, key };
+}
 
 function readme(kind, product) {
   return "# " + product.name + " / " + kind.name + "\n\n" + kind.hint + "\nDrop finished " + kind.id + " here.\nCapCut free export: 1080p, no Pro assets.\n";
