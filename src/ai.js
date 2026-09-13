@@ -200,7 +200,13 @@ export async function grokAssistant(env, { messages, system, helpers, context })
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: data.error?.message || "xAI HTTP " + res.status };
+    if (!res.ok) {
+      const msg = data.error?.message || "xAI HTTP " + res.status;
+      if (res.status === 403) {
+        return { ok: false, error: "Grok 403: XAI_API_KEY is set but xAI has no credits. Add balance at console.x.ai — Mia stays on Gemini until then." };
+      }
+      return { ok: false, error: msg };
+    }
     const msg = data.choices?.[0]?.message || {};
     const calls = msg.tool_calls || [];
     if (!calls.length) {

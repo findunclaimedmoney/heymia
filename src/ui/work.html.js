@@ -82,6 +82,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
         <button type="button" onclick="setMiaMode('plain')" data-mode="plain" class="mia-mode px-2 py-0.5 rounded-md text-[10px] font-bold tab-active">Plain</button>
         <button type="button" onclick="setMiaMode('soft')" data-mode="soft" class="mia-mode px-2 py-0.5 rounded-md text-[10px] font-bold glass-light text-slate-300">Soft</button>
         <button type="button" onclick="setMiaMode('build')" data-mode="build" class="mia-mode px-2 py-0.5 rounded-md text-[10px] font-bold glass-light text-slate-300">Build</button>
+        <button type="button" onclick="setMiaMode('grok')" data-mode="grok" class="mia-mode px-2 py-0.5 rounded-md text-[10px] font-bold glass-light text-slate-300">Grok</button>
       </div>
       <div class="flex flex-wrap gap-1">
         <button type="button" onclick="toggleSkill('vault')" data-skill="vault" class="mia-skill px-2 py-0.5 rounded-md text-[9px] glass-light text-pink-300">Vault</button>
@@ -788,7 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
   try { maybeAutoDailyReport(); } catch (e) {}
   try { updateQuoteStatus(); renderTriggerPanel(); } catch (e) {}
   const geminiMsg = state.geminiKey ? 'Gemini AI active.' : 'Add Gemini / Cloudflare / Stripe keys in the gear (Variables & Secrets).';
-  addMia('System ready. Domain: ' + PUBLIC_DOMAIN + '. Vault, Deploy, API, Shell, GitHub, Knowledge and Trainer are live. ' + geminiMsg);
+  addMia('Mia online — Grok 4.5 assistant. Vault, Sites, Deploy and troubleshooting are in my hands. ' + geminiMsg);
 });
 
 // ========== MODE / TOOL SWITCH ==========
@@ -825,6 +826,33 @@ function switchTool(t) {
       ? base + 'tab-active' 
       : base + 'glass-light text-slate-300';
   });
+}
+
+async function askGrokTroubleshoot(question) {
+  const box = document.getElementById('mia-chat');
+  const dropThinking = () => {
+    if (box && box.lastChild && /Asking Grok|Thinking/.test(box.lastChild.textContent || '')) box.removeChild(box.lastChild);
+  };
+  const ctx = { href: location.href, files: state.files.length, mode: state.miaMode, worker: WORKER_BASE };
+  const urls = [location.origin + '/api/grok', String(WORKER_BASE || '').replace(/\\/$/, '') + '/api/grok'];
+  for (const url of urls) {
+    if (!/^https?:/i.test(url)) continue;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, message: question, context: JSON.stringify(ctx) }),
+      });
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('json')) continue;
+      const data = await res.json();
+      dropThinking();
+      const reply = data.reply || data.text || data.error;
+      if (reply) { addMia('Grok: ' + reply); return; }
+    } catch (e) {}
+  }
+  dropThinking();
+  addMia('Grok is not wired yet. Cloudflare → Worker heymia → Settings → Variables and Secrets → add XAI_API_KEY from console.x.ai then click Grok and ask again.');
 }
 
 // ========== MIA CHAT ==========
@@ -888,6 +916,11 @@ async function sendToMia(e) {
     addMia('Daily Training panel open. Write what you want me to remember.');
     return;
   }
+  if (state.miaMode === 'grok' || /^(grok|troubleshoot)\\b/i.test(text) || /\\b(troubleshoot|debug this|form.?boundary)\\b/i.test(text)) {
+    addMia('Asking Grok…');
+    askGrokTroubleshoot(text);
+    return;
+  }
   if (/\\b(web\\s?site|landing\\s?page|design (a |the )?site|build (a |the )?site|create (a |the )?site)\\b/i.test(text)) {
     switchTool('sites');
     const brief = document.getElementById('site-brief');
@@ -900,26 +933,32 @@ async function sendToMia(e) {
     return;
   }
 
-  // Worker chat then Gemini
+  // Grok-4.5 Mia first (preview /api/chat), then Worker /chat, then browser Gemini
   addMia('Thinking…');
+  const payloads = JSON.stringify({
+    message: text,
+    messages: [{ role: 'user', content: text }],
+    agent: 'Mia',
+    mode: 'work',
+    companion: 'mia',
+  });
+  const chatUrls = [location.origin + '/api/chat'];
+  if (WORKER_BASE) chatUrls.push(WORKER_BASE.replace(/\\/$/, '') + '/chat');
   try {
-    if (WORKER_BASE) {
-      const wres = await fetch(WORKER_BASE.replace(/\\/$/, '') + '/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          messages: [{ role: 'user', content: text }],
-          agent: 'Mia',
-          mode: 'work',
-          companion: 'mia',
-        }),
-      });
-      if (wres.ok) {
+    for (const url of chatUrls) {
+      try {
+        const wres = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payloads,
+        });
+        const ct = wres.headers.get('content-type') || '';
+        if (!wres.ok || !ct.includes('json')) continue;
         const wdata = await wres.json();
         const box = document.getElementById('mia-chat');
         if (box.lastChild && box.lastChild.textContent.includes('Thinking')) box.removeChild(box.lastChild);
-        const reply = wdata.reply || wdata.response || '…';
+        const reply = wdata.reply || wdata.response;
+        if (!reply) continue;
         addMia(reply);
         speakMiaText(reply);
         if (wdata.site && wdata.site.url) {
@@ -927,7 +966,7 @@ async function sendToMia(e) {
           addMia('Live URL: ' + wdata.site.url);
         }
         return;
-      }
+      } catch (e) {}
     }
   } catch (e) { /* fall through to Gemini */ }
 
@@ -2427,6 +2466,7 @@ const MIA_MODES = {
   plain: 'Mode PLAIN: clear, direct, no fluff, not rude. Short practical answers.',
   soft: 'Mode SOFT: warm, conversational, patient. You may use a gentle line of small talk. Still helpful.',
   build: 'Mode BUILD: technical and structured. Prefer steps, checklists, file names, commands. No emotional filler.',
+  grok: 'Mode GROK: xAI Grok-4.5 troubleshoots the Worker, vault, deploy, DNS, and this UI. Short numbered fixes.',
 };
 
 function setMiaMode(mode, silent) {
