@@ -21,14 +21,11 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
 .tab-active { background:linear-gradient(90deg,#ec4899,#a855f7); color:white; }
 .preview-empty { background:radial-gradient(circle at center,#1e1b4b 0%,#07060a 70%); }
 @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-@media (max-width: 768px) {
-  #mia-aside { width: 100% !important; max-width: none; max-height: 38vh; }
-  #vault-cats { width: 9rem !important; }
-  .resize-handle { display: none; }
-}
-.resize-handle { width:5px; cursor:col-resize; flex-shrink:0; background:transparent; position:relative; z-index:5; }
-.resize-handle:hover, .resize-handle.dragging { background:rgba(236,72,153,0.45); }
+.fade-in { animation:fadeIn .3s ease forwards; }
+.resize-handle { width:8px; cursor:col-resize; flex-shrink:0; background:rgba(255,255,255,0.08); position:relative; z-index:20; }
+.resize-handle:hover, .resize-handle.dragging { background:rgba(236,72,153,0.65); }
 #mia-aside, #vault-cats, #vault-preview { min-width:140px; max-width:55vw; }
+#tool-projects { padding-right: 1.25rem; }
 </style>
 </head>
 <body class="flex flex-col h-screen">
@@ -159,17 +156,17 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
     <!-- Tool panels -->
     <div class="flex-1 overflow-hidden relative">
 
-      <div id="tool-projects" class="absolute inset-0 overflow-y-auto p-4 md:p-6">
-        <div class="max-w-5xl mx-auto">
-          <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
-            <div>
+      <div id="tool-projects" class="absolute inset-0 overflow-y-auto overflow-x-hidden p-4">
+        <div class="w-full max-w-4xl">
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <div class="min-w-0 pr-2">
               <h2 class="text-lg font-bold serif">Projects</h2>
-              <p class="text-[11px] text-slate-400">Phone or laptop — tap a card to open files. Empty boards are ready for uploads.</p>
+              <p class="text-[11px] text-slate-400">Tap a card to open files. Drag the pink bars to resize panels.</p>
             </div>
-            <button onclick="seedProductsNow()" class="px-3 py-2 rounded-xl bg-pink-600 text-xs font-bold">Refresh folders</button>
+            <button onclick="seedProductsNow()" class="shrink-0 px-3 py-2 rounded-xl bg-pink-600 text-xs font-bold whitespace-nowrap">Refresh folders</button>
           </div>
-          <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
-          <div id="product-files" class="mt-4 hidden"></div>
+          <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-16"></div>
+          <div id="product-files" class="mt-4 hidden pb-16"></div>
         </div>
       </div>
 
@@ -2391,7 +2388,7 @@ function showPhoneLink() {
     preview: () => document.getElementById('vault-preview'),
   };
   document.querySelectorAll('.resize-handle').forEach(h => {
-    h.addEventListener('mousedown', e => {
+    h.addEventListener('pointerdown', e => {
       const key = h.getAttribute('data-resize');
       const el = targets[key]?.();
       if (!el) return;
@@ -2399,16 +2396,17 @@ function showPhoneLink() {
       startX = e.clientX;
       startW = el.getBoundingClientRect().width;
       h.classList.add('dragging');
+      h.setPointerCapture(e.pointerId);
       e.preventDefault();
     });
   });
-  window.addEventListener('mousemove', e => {
+  window.addEventListener('pointermove', e => {
     if (!active) return;
     const dx = (e.clientX - startX) * active.dir;
     const w = Math.min(Math.max(startW + dx, 140), window.innerWidth * 0.55);
     active.el.style.width = w + 'px';
   });
-  window.addEventListener('mouseup', () => {
+  window.addEventListener('pointerup', () => {
     if (!active) return;
     active.handle.classList.remove('dragging');
     try {
