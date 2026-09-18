@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cut · HeyMia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Playfair+Display:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0a0b;--elev:#121214;--panel:#16161a;--fg:#f4f4f5;--mute:#a1a1aa;--dim:#71717a;
+  --line:rgba(244,244,245,.12);--accent:#e8e4dc;--accent-fg:#0a0a0b;
+  --pink:#ec4899;--ok:#34d399;--warn:#f59e0b;
+  --r:12px;--font:Plus Jakarta Sans,system-ui,sans-serif;--display:Playfair Display,Georgia,serif;--mono:IBM Plex Mono,ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:var(--font);-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+button:disabled{opacity:.4;cursor:not-allowed}
+#app{display:grid;grid-template-rows:52px 1fr 132px;height:100%;min-height:100dvh}
+.top{display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--elev)}
+.brand{font-family:var(--display);font-size:18px;letter-spacing:-.03em}
+.brand span{color:var(--mute);font-family:var(--font);font-size:11px;letter-spacing:.16em;text-transform:uppercase;margin-left:10px}
+.chip{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);padding:4px 8px;border:1px solid var(--line);border-radius:999px}
+.chip.on{color:var(--ok);border-color:rgba(52,211,153,.35)}
+.top-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.btn{height:34px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font-size:12px;font-weight:600}
+.btn:hover{background:#1c1c22}
+.btn.pri{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+.btn.pink{background:var(--pink);color:#fff;border-color:transparent}
+.main{display:grid;grid-template-columns:220px 1fr 260px;min-height:0}
+.col{border-right:1px solid var(--line);overflow:auto;padding:14px;min-height:0}
+.col.stage{padding:0;display:flex;flex-direction:column;background:#050506}
+.col.insp{border-right:0;border-left:1px solid var(--line)}
+h3{margin:0 0 10px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);font-weight:600}
+.tool{width:100%;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;font-size:13px;color:var(--fg);margin-bottom:4px;text-align:left}
+.tool:hover,.tool.on{background:#1c1c22}
+.tool svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;flex-shrink:0}
+.hint{font-size:11px;color:var(--dim);line-height:1.45;margin:8px 0 14px}
+.stage-wrap{flex:1;position:relative;display:grid;place-items:center;overflow:hidden}
+canvas#view,video#vid,img#pic,audio#aud{max-width:100%;max-height:100%}
+canvas#view{position:absolute;inset:0;margin:auto;cursor:crosshair;max-width:100%;max-height:100%}
+video#vid,img#pic{display:none}
+.drop{position:absolute;inset:24px;border:1px dashed var(--line);border-radius:20px;display:grid;place-items:center;text-align:center;color:var(--mute);padding:24px}
+.drop.hid{display:none}
+.drop b{display:block;font-family:var(--display);font-size:28px;color:var(--fg);font-weight:500;margin-bottom:8px}
+.status{height:36px;display:flex;align-items:center;padding:0 14px;font-size:11px;color:var(--mute);border-top:1px solid var(--line);font-variant-numeric:tabular-nums;gap:10px}
+.bar{flex:1;height:3px;background:#222;border-radius:99px;overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:var(--pink);transition:width .2s}
+.tl{border-top:1px solid var(--line);background:var(--elev);padding:10px 16px 12px;display:grid;grid-template-columns:1fr;gap:8px}
+.tl-row{display:flex;align-items:center;gap:10px}
+.tl-row input[type=range]{flex:1;accent-color:var(--pink)}
+.mono{font-family:var(--mono);font-size:11px;color:var(--mute)}
+label.f{display:block;font-size:11px;color:var(--dim);margin:10px 0 4px}
+input[type=text],input[type=number],select{width:100%;height:34px;border-radius:10px;border:1px solid var(--line);background:#0e0e11;padding:0 10px;font-size:12px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.swatch{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.swatch button{width:100%;justify-content:flex-start}
+.empty-vault{font-size:11px;color:var(--dim)}
+.vault-item{width:100%;text-align:left;padding:8px;border-radius:8px;font-size:11px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vault-item:hover{background:#1c1c22;color:var(--fg)}
+@media(max-width:900px){
+  .main{grid-template-columns:1fr;grid-template-rows:auto 1fr auto}
+  .col{border-right:0;border-bottom:1px solid var(--line);max-height:28vh}
+  .col.stage{max-height:none}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="brand">Cut<span>HeyMia bench</span></div>
+    <span class="chip" id="ff-chip">FFmpeg idle</span>
+    <span class="chip" id="kind-chip">no clip</span>
+    <div class="top-actions">
+      <button class="btn" id="btn-demo" type="button">Load slate</button>
+      <button class="btn" id="btn-open" type="button">Open file</button>
+      <button class="btn" id="btn-pop" type="button">Pop out</button>
+      <button class="btn pri" id="btn-export" type="button">Export</button>
+    </div>
+  </header>
+  <div class="main">
+    <aside class="col">
+      <h3>Bench</h3>
+      <button class="tool on" data-tool="select" type="button"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Select</button>
+      <button class="tool" data-tool="trim" type="button"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M8 4v4H4M16 20v-4h4"/></svg>Trim</button>
+      <button class="tool" data-tool="crop" type="button"><svg viewBox="0 0 24 24"><path d="M6 2v14h16M2 6h14v16"/></svg>Crop</button>
+      <button class="tool" data-tool="erase" type="button"><svg viewBox="0 0 24 24"><path d="M3 21l3-3 12-12 3 3-12 12z"/><path d="M14 7l3 3"/></svg>Magic eraser</button>
+      <button class="tool" data-tool="audio" type="button"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15 9a5 5 0 010 6"/></svg>Audio</button>
+      <p class="hint">Workers cannot spawn native FFmpeg. This bench runs FFmpeg.wasm in your browser for encode, plus canvas / Web Audio for crop, trim, volume, and heal.</p>
+      <h3>Vault media</h3>
+      <div id="vault-list" class="empty-vault">Loading…</div>
+    </aside>
+    <section class="col stage">
+      <div class="stage-wrap" id="stage">
+        <div class="drop" id="drop">
+          <div>
+            <b>Drop a clip</b>
+            Video, audio, or image. Trim, crop, mute, fade, extract wav, or paint a heal.
+          </div>
+        </div>
+        <video id="vid" playsinline></video>
+        <img id="pic" alt="">
+        <audio id="aud"></audio>
+        <canvas id="view"></canvas>
+      </div>
+      <div class="status"><span id="stat">Ready</span><div class="bar"><i id="prog"></i></div><span id="clock" class="mono">00:00 / 00:00</span></div>
+    </section>
+    <aside class="col insp">
+      <h3>Inspector</h3>
+      <div class="row2">
+        <div><label class="f">In</label><input id="in-pt" type="number" step="0.05" min="0" value="0"></div>
+        <div><label class="f">Out</label><input id="out-pt" type="number" step="0.05" min="0" value="0"></div>
+      </div>
+      <label class="f">Speed</label>
+      <select id="speed">
+        <option value="0.5">0.5×</option>
+        <option value="0.75">0.75×</option>
+        <option value="1" selected>1×</option>
+        <option value="1.25">1.25×</option>
+        <option value="1.5">1.5×</option>
+        <option value="2">2×</option>
+      </select>
+      <label class="f">Rotate</label>
+      <div class="row2">
+        <button class="btn" type="button" data-rot="-90">−90°</button>
+        <button class="btn" type="button" data-rot="90">+90°</button>
+      </div>
+      <div class="row2" style="margin-top:8px">
+        <button class="btn" type="button" id="flip-h">Flip H</button>
+        <button class="btn" type="button" id="flip-v">Flip V</button>
+      </div>
+      <label class="f">Volume <span id="vol-lab" class="mono">100%</span></label>
+      <input id="vol" type="range" min="0" max="200" value="100">
+      <div class="row2" style="margin-top:8px">
+        <button class="btn" type="button" id="mute">Mute</button>
+        <button class="btn" type="button" id="extract">Extract WAV</button>
+      </div>
+      <div class="row2">
+        <div><label class="f">Fade in (s)</label><input id="fade-in" type="number" step="0.1" min="0" value="0"></div>
+        <div><label class="f">Fade out (s)</label><input id="fade-out" type="number" step="0.1" min="0" value="0"></div>
+      </div>
+      <label class="f">Caption</label>
+      <input id="caption" type="text" placeholder="Lower-third text">
+      <div id="erase-box" style="display:none">
+        <label class="f">Brush <span id="brush-lab" class="mono">28</span></label>
+        <input id="brush" type="range" min="8" max="80" value="28">
+        <p class="hint">Paint the object. Heal fills from nearby pixels. Whole-clip uses that still as an overlay (logos, watermarks).</p>
+        <div class="row2">
+          <button class="btn" type="button" id="heal-frame">Heal frame</button>
+          <button class="btn pink" type="button" id="heal-clip">Heal clip</button>
+        </div>
+        <button class="btn" type="button" id="heal-ai" style="width:100%;margin-top:8px">AI fill (Workers AI)</button>
+      </div>
+      <label class="f">Save as</label>
+      <input id="out-name" type="text" value="cut-export">
+    </aside>
+  </div>
+  <footer class="tl">
+    <div class="tl-row">
+      <button class="btn" type="button" id="play">Play</button>
+      <input id="seek" type="range" min="0" max="1000" value="0">
+      <span class="mono" id="io-lab">in 0.00 · out 0.00</span>
+    </div>
+    <div class="tl-row">
+      <span class="mono">IN</span>
+      <input id="in-range" type="range" min="0" max="1000" value="0">
+      <span class="mono">OUT</span>
+      <input id="out-range" type="range" min="0" max="1000" value="1000">
+    </div>
+  </footer>
+</div>
+<input id="file" type="file" accept="video/*,audio/*,image/*" hidden>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+<script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+<script>
+const S = {
+  kind: null, file: null, url: null, w: 960, h: 540, dur: 0,
+  in: 0, out: 0, rot: 0, flipH: false, flipV: false, speed: 1, vol: 1, mute: false,
+  tool: "select", crop: null, dragging: null, brush: 28,
+  mask: null, healed: null, ffmpeg: null, ffReady: false, caption: "",
+  fadeIn: 0, fadeOut: 0, key: ""
+};
+const $ = (id) => document.getElementById(id);
+const view = $("view");
+const ctx = view.getContext("2d");
+const vid = $("vid");
+const pic = $("pic");
+const aud = $("aud");
+const maskC = document.createElement("canvas");
+const maskX = maskC.getContext("2d");
+
+function setStat(t, p) {
+  $("stat").textContent = t;
+  if (p != null) $("prog").style.width = Math.max(0, Math.min(100, p)) + "%";
+}
+function fmt(t) {
+  t = Math.max(0, t || 0);
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  const f = Math.floor((t % 1) * 100);
+  return String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0") + "." + String(f).padStart(2,"0");
+}
+function sizeCanvas(w, h) {
+  S.w = w; S.h = h;
+  view.width = w; view.height = h;
+  maskC.width = w; maskC.height = h;
+  const wrap = $("stage");
+  const maxW = wrap.clientWidth - 24;
+  const maxH = wrap.clientHeight - 24;
+  const sc = Math.min(maxW / w, maxH / h, 1);
+  view.style.width = (w * sc) + "px";
+  view.style.height = (h * sc) + "px";
+}
+function draw() {
+  if (!S.kind) return;
+  ctx.save();
+  ctx.clearRect(0,0,view.width,view.height);
+  ctx.translate(view.width/2, view.height/2);
+  ctx.rotate(S.rot * Math.PI / 180);
+  ctx.scale(S.flipH ? -1 : 1, S.flipV ? -1 : 1);
+  ctx.translate(-view.width/2, -view.height/2);
+  if (S.kind === "video") ctx.drawImage(vid, 0, 0, view.width, view.height);
+  else if (S.kind === "image") ctx.drawImage(pic, 0, 0, view.width, view.height);
+  else if (S.kind === "audio") {
+    ctx.fillStyle = "#0e0e11";
+    ctx.fillRect(0,0,view.width,view.height);
+    ctx.fillStyle = "#ec4899";
+    ctx.font = "600 28px Playfair Display, serif";
+    ctx.fillText("Audio", 40, 80);
+    ctx.fillStyle = "#a1a1aa";
+    ctx.font = "14px Plus Jakarta Sans, sans-serif";
+    ctx.fillText(S.file && S.file.name || "clip", 40, 112);
+  }
+  ctx.restore();
+  if (S.healed) ctx.drawImage(S.healed, 0, 0, view.width, view.height);
+  if (S.tool === "erase") ctx.drawImage(maskC, 0, 0);
+  if (S.crop && S.tool === "crop") {
+    ctx.fillStyle = "rgba(0,0,0,.45)";
+    ctx.fillRect(0,0,view.width,view.height);
+    ctx.clearRect(S.crop.x, S.crop.y, S.crop.w, S.crop.h);
+    ctx.strokeStyle = "#e8e4dc";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(S.crop.x + 1, S.crop.y + 1, S.crop.w - 2, S.crop.h - 2);
+  }
+  if (S.caption) {
+    ctx.fillStyle = "rgba(0,0,0,.55)";
+    ctx.fillRect(24, view.height - 72, view.width - 48, 48);
+    ctx.fillStyle = "#f4f4f5";
+    ctx.font = "600 20px Plus Jakarta Sans, sans-serif";
+    ctx.fillText(S.caption, 40, view.height - 40);
+  }
+}
+function tick() {
+  if (S.kind === "video" && !vid.paused) draw();
+  const t = S.kind === "video" ? vid.currentTime : S.kind === "audio" ? aud.currentTime : 0;
+  $("clock").textContent = fmt(t) + " / " + fmt(S.dur);
+  if (S.dur) $("seek").value = String(Math.round((t / S.dur) * 1000));
+  if (S.kind === "video" && !vid.paused && t >= S.out && S.out > S.in) {
+    vid.pause();
+    vid.currentTime = S.in;
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+function setKind(k) {
+  S.kind = k;
+  $("kind-chip").textContent = k || "no clip";
+  $("kind-chip").classList.toggle("on", !!k);
+  $("drop").classList.toggle("hid", !!k);
+}
+
+async function loadBlob(blob, name, key) {
+  if (S.url) URL.revokeObjectURL(S.url);
+  S.file = new File([blob], name || "clip.bin", { type: blob.type || "application/octet-stream" });
+  S.url = URL.createObjectURL(S.file);
+  S.key = key || "";
+  S.healed = null;
+  maskX.clearRect(0,0,maskC.width,maskC.height);
+  const t = S.file.type;
+  if (t.startsWith("video/") || /\.(mp4|webm|mov|mkv)$/i.test(name)) {
+    vid.src = S.url;
+    await new Promise((res, rej) => { vid.onloadedmetadata = res; vid.onerror = () => rej(new Error("video")); });
+    sizeCanvas(vid.videoWidth || 960, vid.videoHeight || 540);
+    S.dur = vid.duration || 0;
+    S.in = 0; S.out = S.dur;
+    setKind("video");
+    vid.currentTime = 0;
+    setTimeout(draw, 60);
+  } else if (t.startsWith("audio/") || /\.(mp3|wav|m4a|aac|ogg)$/i.test(name)) {
+    aud.src = S.url;
+    await new Promise((res, rej) => { aud.onloadedmetadata = res; aud.onerror = () => rej(new Error("audio")); });
+    sizeCanvas(960, 320);
+    S.dur = aud.duration || 0;
+    S.in = 0; S.out = S.dur;
+    setKind("audio");
+    draw();
+  } else {
+    pic.src = S.url;
+    await new Promise((res, rej) => { pic.onload = res; pic.onerror = () => rej(new Error("image")); });
+    sizeCanvas(pic.naturalWidth, pic.naturalHeight);
+    S.dur = 0; S.in = 0; S.out = 0;
+    setKind("image");
+    draw();
+  }
+  $("in-pt").value = S.in.toFixed(2);
+  $("out-pt").value = S.out.toFixed(2);
+  $("in-range").value = "0";
+  $("out-range").value = "1000";
+  $("out-name").value = (name || "cut").replace(/\.[^.]+$/, "") + "-cut";
+  setStat("Loaded " + (name || "clip"));
+  syncIO();
+}
+
+function syncIO() {
+  $("io-lab").textContent = "in " + S.in.toFixed(2) + " · out " + S.out.toFixed(2);
+  $("in-pt").value = S.in.toFixed(2);
+  $("out-pt").value = S.out.toFixed(2);
+  if (S.dur) {
+    $("in-range").value = String(Math.round((S.in / S.dur) * 1000));
+    $("out-range").value = String(Math.round((S.out / S.dur) * 1000));
+  }
+}
+
+$("file").onchange = (e) => { const f = e.target.files[0]; if (f) loadBlob(f, f.name); };
+$("btn-open").onclick = () => $("file").click();
+$("btn-pop").onclick = () => window.open("/edit", "_blank");
+$("drop").addEventListener("dragover", (e) => { e.preventDefault(); });
+$("drop").addEventListener("drop", (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (f) loadBlob(f, f.name);
+});
+document.querySelectorAll(".tool").forEach((b) => {
+  b.onclick = () => {
+    S.tool = b.dataset.tool;
+    document.querySelectorAll(".tool").forEach((x) => x.classList.toggle("on", x === b));
+    $("erase-box").style.display = S.tool === "erase" ? "block" : "none";
+    if (S.tool === "crop" && !S.crop) S.crop = { x: view.width * 0.1, y: view.height * 0.1, w: view.width * 0.8, h: view.height * 0.8 };
+    draw();
+  };
+});
+$("play").onclick = () => {
+  if (S.kind === "video") {
+    if (vid.paused) { vid.currentTime = S.in; vid.playbackRate = S.speed; vid.volume = S.mute ? 0 : Math.min(1, S.vol); vid.play(); $("play").textContent = "Pause"; }
+    else { vid.pause(); $("play").textContent = "Play"; }
+  } else if (S.kind === "audio") {
+    if (aud.paused) { aud.currentTime = S.in; aud.playbackRate = S.speed; aud.volume = S.mute ? 0 : Math.min(1, S.vol); aud.play(); $("play").textContent = "Pause"; }
+    else { aud.pause(); $("play").textContent = "Play"; }
+  }
+};
+$("seek").oninput = () => {
+  const t = (Number($("seek").value) / 1000) * S.dur;
+  if (S.kind === "video") { vid.currentTime = t; setTimeout(draw, 40); }
+  if (S.kind === "audio") aud.currentTime = t;
+};
+$("in-range").oninput = () => { S.in = (Number($("in-range").value) / 1000) * S.dur; if (S.in > S.out) S.out = S.in; syncIO(); };
+$("out-range").oninput = () => { S.out = (Number($("out-range").value) / 1000) * S.dur; if (S.out < S.in) S.in = S.out; syncIO(); };
+$("in-pt").onchange = () => { S.in = Math.max(0, Number($("in-pt").value) || 0); syncIO(); };
+$("out-pt").onchange = () => { S.out = Math.max(S.in, Number($("out-pt").value) || 0); syncIO(); };
+$("speed").onchange = () => { S.speed = Number($("speed").value) || 1; };
+$("vol").oninput = () => { S.vol = Number($("vol").value) / 100; $("vol-lab").textContent = Math.round(S.vol * 100) + "%"; };
+$("mute").onclick = () => { S.mute = !S.mute; $("mute").textContent = S.mute ? "Unmute" : "Mute"; };
+document.querySelectorAll("[data-rot]").forEach((b) => b.onclick = () => { S.rot = (S.rot + Number(b.dataset.rot) + 360) % 360; draw(); });
+$("flip-h").onclick = () => { S.flipH = !S.flipH; draw(); };
+$("flip-v").onclick = () => { S.flipV = !S.flipV; draw(); };
+$("caption").oninput = () => { S.caption = $("caption").value; draw(); };
+$("fade-in").onchange = () => { S.fadeIn = Number($("fade-in").value) || 0; };
+$("fade-out").onchange = () => { S.fadeOut = Number($("fade-out").value) || 0; };
+$("brush").oninput = () => { S.brush = Number($("brush").value); $("brush-lab").textContent = String(S.brush); };
+
+function viewPos(e) {
+  const r = view.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * (view.width / r.width), y: (e.clientY - r.top) * (view.height / r.height) };
+}
+view.addEventListener("pointerdown", (e) => {
+  if (!S.kind) return;
+  const p = viewPos(e);
+  if (S.tool === "erase") {
+    S.dragging = "erase";
+    paintMask(p.x, p.y);
+  } else if (S.tool === "crop") {
+    S.dragging = "crop";
+    S.crop = { x: p.x, y: p.y, w: 1, h: 1, ox: p.x, oy: p.y };
+  }
+});
+view.addEventListener("pointermove", (e) => {
+  if (!S.dragging) return;
+  const p = viewPos(e);
+  if (S.dragging === "erase") paintMask(p.x, p.y);
+  if (S.dragging === "crop") {
+    S.crop.x = Math.min(S.crop.ox, p.x);
+    S.crop.y = Math.min(S.crop.oy, p.y);
+    S.crop.w = Math.abs(p.x - S.crop.ox);
+    S.crop.h = Math.abs(p.y - S.crop.oy);
+    draw();
+  }
+});
+window.addEventListener("pointerup", () => { S.dragging = null; });
+
+function paintMask(x, y) {
+  maskX.fillStyle = "rgba(236,72,153,.45)";
+  maskX.beginPath();
+  maskX.arc(x, y, S.brush, 0, Math.PI * 2);
+  maskX.fill();
+  draw();
+}
+
+function telea(src, mask, radius) {
+  const w = src.width, h = src.height;
+  const d = new Uint8ClampedArray(src.data);
+  const m = mask.data;
+  const known = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) known[i] = m[i * 4 + 3] > 24 ? 0 : 1;
+  const rad = radius || 6;
+  for (let pass = 0; pass < 12; pass++) {
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const i = y * w + x;
+        if (known[i]) continue;
+        let rs = 0, gs = 0, bs = 0, wt = 0;
+        for (let yy = -rad; yy <= rad; yy++) {
+          for (let xx = -rad; xx <= rad; xx++) {
+            const nx = x + xx, ny = y + yy;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            const ni = ny * w + nx;
+            if (!known[ni]) continue;
+            const dist = xx * xx + yy * yy + 1;
+            const wgt = 1 / dist;
+            const o = ni * 4;
+            rs += d[o] * wgt; gs += d[o+1] * wgt; bs += d[o+2] * wgt; wt += wgt;
+          }
+        }
+        if (wt > 0) {
+          const o = i * 4;
+          d[o] = rs / wt; d[o+1] = gs / wt; d[o+2] = bs / wt; d[o+3] = 255;
+          known[i] = 1;
+        }
+      }
+    }
+  }
+  return new ImageData(d, w, h);
+}
+
+function frameImageData() {
+  const c = document.createElement("canvas");
+  c.width = view.width; c.height = view.height;
+  const g = c.getContext("2d");
+  if (S.kind === "video") g.drawImage(vid, 0, 0, c.width, c.height);
+  else if (S.kind === "image") g.drawImage(pic, 0, 0, c.width, c.height);
+  else g.drawImage(view, 0, 0);
+  return { c, g, data: g.getImageData(0, 0, c.width, c.height) };
+}
+
+$("heal-frame").onclick = () => {
+  const { g, data } = frameImageData();
+  const md = maskX.getImageData(0, 0, maskC.width, maskC.height);
+  const healed = telea(data, md, 7);
+  g.putImageData(healed, 0, 0);
+  S.healed = document.createElement("canvas");
+  S.healed.width = view.width; S.healed.height = view.height;
+  S.healed.getContext("2d").putImageData(healed, 0, 0);
+  maskX.clearRect(0,0,maskC.width,maskC.height);
+  draw();
+  setStat("Frame healed");
+};
+
+$("heal-clip").onclick = () => {
+  $("heal-frame").onclick();
+  setStat("Heal locked as overlay for the whole clip");
+};
+
+$("heal-ai").onclick = async () => {
+  try {
+    setStat("Asking Workers AI to fill…", 10);
+    const { c, data } = frameImageData();
+    const md = maskX.getImageData(0, 0, maskC.width, maskC.height);
+    const imgBlob = await new Promise((r) => c.toBlob(r, "image/png"));
+    const mc = document.createElement("canvas");
+    mc.width = maskC.width; mc.height = maskC.height;
+    const mx = mc.getContext("2d");
+    mx.fillStyle = "#000"; mx.fillRect(0,0,mc.width,mc.height);
+    const id = mx.getImageData(0,0,mc.width,mc.height);
+    for (let i = 0; i < md.data.length; i += 4) {
+      const on = md.data[i+3] > 24;
+      id.data[i] = id.data[i+1] = id.data[i+2] = on ? 255 : 0;
+      id.data[i+3] = 255;
+    }
+    mx.putImageData(id, 0, 0);
+    const maskBlob = await new Promise((r) => mc.toBlob(r, "image/png"));
+    const toB64 = async (b) => {
+      const buf = await b.arrayBuffer();
+      let bin = "";
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin);
+    };
+    const res = await fetch("/api/edit/inpaint", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: await toB64(imgBlob), mask: await toB64(maskBlob), prompt: "remove the painted object, reconstruct the background" })
+    });
+    const js = await res.json();
+    if (!js.ok) {
+      setStat("AI fill unavailable — using local heal. " + (js.error || ""));
+      $("heal-frame").onclick();
+      return;
+    }
+    const im = new Image();
+    im.onload = () => {
+      S.healed = document.createElement("canvas");
+      S.healed.width = view.width; S.healed.height = view.height;
+      S.healed.getContext("2d").drawImage(im, 0, 0, view.width, view.height);
+      maskX.clearRect(0,0,maskC.width,maskC.height);
+      draw();
+      setStat("AI fill applied");
+    };
+    im.src = "data:image/png;base64," + js.image;
+  } catch (e) {
+    setStat("AI fill failed — local heal");
+    $("heal-frame").onclick();
+  }
+};
+
+async function loadFFmpeg() {
+  if (S.ffReady) return S.ffmpeg;
+  const FFmpeg = (window.FFmpegWASM && window.FFmpegWASM.FFmpeg) || (window.FFmpeg && window.FFmpeg.FFmpeg);
+  const util = window.FFmpegUtil || {};
+  if (!FFmpeg) throw new Error("FFmpeg.wasm scripts missing");
+  const ffmpeg = new FFmpeg();
+  ffmpeg.on("log", ({ message }) => { if (message) setStat(message.slice(0, 80)); });
+  ffmpeg.on("progress", ({ progress }) => setStat("Encoding…", (progress || 0) * 100));
+  const base = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+  const toBlobURL = util.toBlobURL;
+  setStat("Loading FFmpeg.wasm…", 5);
+  if (toBlobURL) {
+    await ffmpeg.load({
+      coreURL: await toBlobURL(base + "/ffmpeg-core.js", "text/javascript"),
+      wasmURL: await toBlobURL(base + "/ffmpeg-core.wasm", "application/wasm"),
+    });
+  } else {
+    await ffmpeg.load({
+      coreURL: base + "/ffmpeg-core.js",
+      wasmURL: base + "/ffmpeg-core.wasm",
+    });
+  }
+  S.ffmpeg = ffmpeg;
+  S.ffReady = true;
+  $("ff-chip").textContent = "FFmpeg ready";
+  $("ff-chip").classList.add("on");
+  setStat("FFmpeg.wasm ready");
+  return ffmpeg;
+}
+
+function vfChain() {
+  const p = [];
+  if (S.crop && S.crop.w > 8 && S.crop.h > 8) {
+    const x = Math.max(0, Math.round(S.crop.x));
+    const y = Math.max(0, Math.round(S.crop.y));
+    const w = Math.round(S.crop.w) - Math.round(S.crop.w) % 2;
+    const h = Math.round(S.crop.h) - Math.round(S.crop.h) % 2;
+    p.push("crop=" + w + ":" + h + ":" + x + ":" + y);
+  }
+  if (S.rot === 90) p.push("transpose=1");
+  if (S.rot === 180) p.push("transpose=1,transpose=1");
+  if (S.rot === 270) p.push("transpose=2");
+  if (S.flipH) p.push("hflip");
+  if (S.flipV) p.push("vflip");
+  if (S.speed && S.speed !== 1) p.push("setpts=PTS/" + S.speed);
+  const dur = Math.max(0.05, (S.out - S.in) / (S.speed || 1));
+  if (S.fadeIn) p.push("fade=t=in:st=0:d=" + S.fadeIn);
+  if (S.fadeOut) p.push("fade=t=out:st=" + Math.max(0, dur - S.fadeOut) + ":d=" + S.fadeOut);
+  if (S.caption) p.push("drawtext=text='" + S.caption.replace(/[:\\\\']/g, " ") + "':fontcolor=white:fontsize=28:x=40:y=h-80:box=1:boxcolor=black@0.5:boxborderw=8");
+  return p.join(",");
+}
+function atempo(v) {
+  const chain = [];
+  let rest = v;
+  while (rest > 2.0001) { chain.push("atempo=2.0"); rest /= 2; }
+  while (rest < 0.499) { chain.push("atempo=0.5"); rest /= 0.5; }
+  chain.push("atempo=" + rest.toFixed(3));
+  return chain.join(",");
+}
+function afChain() {
+  const p = [];
+  if (S.mute) p.push("volume=0");
+  else if (S.vol !== 1) p.push("volume=" + S.vol);
+  if (S.speed && S.speed !== 1) p.push(atempo(S.speed));
+  if (S.fadeIn) p.push("afade=t=in:st=0:d=" + S.fadeIn);
+  if (S.fadeOut) {
+    const dur = Math.max(0.05, (S.out - S.in) / (S.speed || 1));
+    p.push("afade=t=out:st=" + Math.max(0, dur - S.fadeOut) + ":d=" + S.fadeOut);
+  }
+  return p.join(",");
+}
+
+async function runFFmpeg(outName, extra) {
+  const ffmpeg = await loadFFmpeg();
+  const util = window.FFmpegUtil || {};
+  const fetchFile = util.fetchFile || (async (f) => new Uint8Array(await f.arrayBuffer()));
+  const input = "input" + ((S.file && S.file.name.match(/\.[a-z0-9]+$/i)) || [".bin"])[0];
+  await ffmpeg.writeFile(input, await fetchFile(S.file));
+  if (S.healed) {
+    const blob = await new Promise((r) => S.healed.toBlob(r, "image/png"));
+    await ffmpeg.writeFile("heal.png", await fetchFile(blob));
+  }
+  const args = ["-y"];
+  if (S.in) args.push("-ss", String(S.in));
+  args.push("-i", input);
+  if (S.healed) args.push("-i", "heal.png");
+  if (S.out > S.in) args.push("-t", String(Math.max(0.05, S.out - S.in)));
+  let vf = vfChain();
+  if (S.healed) vf = (vf ? vf + "," : "") + "overlay=0:0";
+  const af = afChain();
+  if (vf) args.push("-vf", vf);
+  if (af) args.push("-af", af);
+  if (extra && extra.audioOnly) { args.push("-vn"); }
+  args.push(outName);
+  await ffmpeg.exec(args);
+  const data = await ffmpeg.readFile(outName);
+  return new Blob([data.buffer], { type: extra && extra.mime || "video/mp4" });
+}
+
+async function exportWavFromAudio() {
+  const ctxA = new (window.AudioContext || window.webkitAudioContext)();
+  const buf = await ctxA.decodeAudioData(await S.file.arrayBuffer());
+  const sr = buf.sampleRate;
+  const start = Math.floor(S.in * sr);
+  const end = Math.floor((S.out || buf.duration) * sr);
+  const len = Math.max(1, end - start);
+  const ch = buf.numberOfChannels;
+  const out = ctxA.createBuffer(ch, len, sr);
+  for (let c = 0; c < ch; c++) {
+    const src = buf.getChannelData(c).subarray(start, end);
+    const dst = out.getChannelData(c);
+    const vol = S.mute ? 0 : S.vol;
+    for (let i = 0; i < src.length; i++) dst[i] = src[i] * vol;
+  }
+  return encodeWav(out);
+}
+function encodeWav(buffer) {
+  const ch = buffer.numberOfChannels, sr = buffer.sampleRate, n = buffer.length;
+  const dataLen = n * ch * 2;
+  const ab = new ArrayBuffer(44 + dataLen);
+  const v = new DataView(ab);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + dataLen, true); w(8, "WAVE"); w(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * ch * 2, true); v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true);
+  w(36, "data"); v.setUint32(40, dataLen, true);
+  let off = 44;
+  for (let i = 0; i < n; i++) {
+    for (let c = 0; c < ch; c++) {
+      let s = Math.max(-1, Math.min(1, buffer.getChannelData(c)[i]));
+      v.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      off += 2;
+    }
+  }
+  return new Blob([ab], { type: "audio/wav" });
+}
+
+async function exportCanvasImage() {
+  draw();
+  let c = view;
+  if (S.crop && S.crop.w > 8) {
+    const t = document.createElement("canvas");
+    t.width = Math.round(S.crop.w); t.height = Math.round(S.crop.h);
+    t.getContext("2d").drawImage(view, S.crop.x, S.crop.y, S.crop.w, S.crop.h, 0, 0, t.width, t.height);
+    c = t;
+  }
+  return new Promise((r) => c.toBlob(r, "image/png"));
+}
+
+async function exportMediaRecorder() {
+  const canvas = document.createElement("canvas");
+  let w = S.crop && S.crop.w > 8 ? Math.round(S.crop.w) : view.width;
+  let h = S.crop && S.crop.h > 8 ? Math.round(S.crop.h) : view.height;
+  w -= w % 2; h -= h % 2;
+  canvas.width = w; canvas.height = h;
+  const g = canvas.getContext("2d");
+  const v = vid.cloneNode(true);
+  v.src = S.url;
+  v.muted = true;
+  await new Promise((res) => { v.onloadedmetadata = res; });
+  v.currentTime = S.in;
+  v.playbackRate = S.speed;
+  await new Promise((res) => { v.onseeked = res; });
+  const stream = canvas.captureStream(30);
+  const rec = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm" });
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  const stopP = new Promise((res) => { rec.onstop = () => res(new Blob(chunks, { type: "video/webm" })); });
+  rec.start();
+  await v.play();
+  const t0 = performance.now();
+  const durMs = ((S.out - S.in) / S.speed) * 1000;
+  await new Promise((res) => {
+    const loop = () => {
+      if (S.crop && S.crop.w > 8) g.drawImage(v, S.crop.x, S.crop.y, S.crop.w, S.crop.h, 0, 0, w, h);
+      else g.drawImage(v, 0, 0, w, h);
+      if (S.healed) g.drawImage(S.healed, 0, 0, w, h);
+      if (performance.now() - t0 < durMs && !v.ended) requestAnimationFrame(loop);
+      else res();
+    };
+    loop();
+  });
+  v.pause();
+  rec.stop();
+  return stopP;
+}
+
+async function saveVault(blob, name, type) {
+  const res = await fetch("/files", {
+    method: "POST",
+    headers: { "X-File-Name": name, "Content-Type": type, "X-Category": "vault" },
+    body: blob
+  });
+  return res.json().catch(() => ({}));
+}
+
+$("extract").onclick = async () => {
+  try {
+    setStat("Extracting audio…", 8);
+    let blob;
+    try { blob = await runFFmpeg("out.wav", { audioOnly: true, mime: "audio/wav" }); }
+    catch { blob = await exportWavFromAudio(); }
+    const name = ($("out-name").value || "audio") + ".wav";
+    download(blob, name);
+    await saveVault(blob, name, "audio/wav");
+    setStat("WAV saved", 100);
+  } catch (e) { setStat("Extract failed: " + e.message); }
+};
+
+$("btn-export").onclick = async () => {
+  if (!S.kind) { setStat("Load a clip first"); return; }
+  const base = $("out-name").value || "cut-export";
+  try {
+    let blob, name, type;
+    if (S.kind === "image") {
+      blob = await exportCanvasImage(); name = base + ".png"; type = "image/png";
+    } else if (S.kind === "audio") {
+      try { blob = await runFFmpeg("out.wav", { audioOnly: true, mime: "audio/wav" }); }
+      catch { blob = await exportWavFromAudio(); }
+      name = base + ".wav"; type = "audio/wav";
+    } else {
+      try {
+        blob = await runFFmpeg("out.mp4", { mime: "video/mp4" });
+        name = base + ".mp4"; type = "video/mp4";
+      } catch (e) {
+        setStat("FFmpeg blocked here — recording canvas (webm). Pop out /edit for MP4. " + e.message);
+        blob = await exportMediaRecorder();
+        name = base + ".webm"; type = "video/webm";
+      }
+    }
+    download(blob, name);
+    const saved = await saveVault(blob, name, type);
+    setStat(saved && saved.ok ? "Exported and saved to vault: " + (saved.key || name) : "Downloaded " + name, 100);
+  } catch (e) {
+    setStat("Export failed: " + e.message);
+  }
+};
+
+function download(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+}
+
+$("btn-demo").onclick = async () => {
+  const c = document.createElement("canvas");
+  c.width = 960; c.height = 540;
+  const g = c.getContext("2d");
+  const grd = g.createLinearGradient(0,0,960,540);
+  grd.addColorStop(0, "#1a1520");
+  grd.addColorStop(1, "#3a2a18");
+  g.fillStyle = grd; g.fillRect(0,0,960,540);
+  g.fillStyle = "#ec4899";
+  g.fillRect(720, 40, 180, 54);
+  g.fillStyle = "#fff";
+  g.font = "700 18px Plus Jakarta Sans";
+  g.fillText("LOGO", 770, 74);
+  g.fillStyle = "#efe6d4";
+  g.font = "500 56px Playfair Display";
+  g.fillText("HeyMia slate", 64, 280);
+  g.font = "16px Plus Jakarta Sans";
+  g.fillStyle = "#a1a1aa";
+  g.fillText("Paint the pink logo, then Magic eraser → Heal frame.", 64, 320);
+  const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+  await loadBlob(blob, "slate-logo.png");
+  setStat("Slate loaded — erase the logo");
+};
+
+async function loadVault() {
+  const box = $("vault-list");
+  try {
+    const res = await fetch("/api/vault");
+    const js = await res.json();
+    const files = (js.files || js.objects || []).filter((f) => {
+      const n = (f.name || f.key || "").toLowerCase();
+      return /\.(mp4|webm|mov|mkv|mp3|wav|m4a|png|jpe?g|webp|gif)$/.test(n);
+    }).slice(0, 40);
+    if (!files.length) { box.textContent = "No media in vault yet."; return; }
+    box.innerHTML = "";
+    files.forEach((f) => {
+      const b = document.createElement("button");
+      b.className = "vault-item";
+      b.type = "button";
+      b.textContent = f.name || f.key;
+      b.onclick = async () => {
+        const key = f.key || f.name;
+        setStat("Fetching " + key);
+        const r = await fetch("/api/vault?key=" + encodeURIComponent(key));
+        const blob = await r.blob();
+        await loadBlob(blob, f.name || key, key);
+      };
+      box.appendChild(b);
+    });
+  } catch {
+    box.textContent = "Vault not on this preview — drop a file.";
+  }
+}
+
+async function applyJob() {
+  const q = new URLSearchParams(location.search);
+  const key = q.get("key");
+  const job = q.get("job");
+  if (job) {
+    try {
+      const js = await (await fetch("/api/edit/job?id=" + encodeURIComponent(job))).json();
+      if (js && js.ok && js.job) {
+        const J = js.job;
+        if (J.key) {
+          const r = await fetch("/api/vault?key=" + encodeURIComponent(J.key));
+          await loadBlob(await r.blob(), J.name || J.key, J.key);
+        }
+        if (J.trim_start != null) S.in = Number(J.trim_start);
+        if (J.trim_end != null) S.out = Number(J.trim_end);
+        if (J.speed) S.speed = Number(J.speed);
+        if (J.volume != null) { S.vol = Number(J.volume); $("vol").value = String(S.vol * 100); }
+        if (J.mute) S.mute = true;
+        if (J.rotate) S.rot = Number(J.rotate);
+        if (J.caption) { S.caption = J.caption; $("caption").value = J.caption; }
+        if (J.fade_in) S.fadeIn = Number(J.fade_in);
+        if (J.fade_out) S.fadeOut = Number(J.fade_out);
+        syncIO(); draw();
+        setStat("Recipe from Mia loaded");
+      }
+    } catch {}
+  } else if (key) {
+    const r = await fetch("/api/vault?key=" + encodeURIComponent(key));
+    await loadBlob(await r.blob(), q.get("name") || key, key);
+  }
+}
+
+loadVault();
+applyJob();
+if (window.crossOriginIsolated) {
+  $("ff-chip").textContent = "isolated · FFmpeg on";
+  loadFFmpeg().catch(() => $("ff-chip").textContent = "FFmpeg blocked");
+} else {
+  $("ff-chip").textContent = "embed · pop out for MP4";
+}
+</script>
+</body>
+</html>
