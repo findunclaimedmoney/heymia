@@ -1,4 +1,3 @@
-import workHtml from "./ui/work.html.js";
 import { handleAgentChat, routeFile, grokTroubleshoot } from "./ai.js";
 import { handleUiAdmin, matchHtmlPage, serveUI, unwrapHtml } from "./routing.js";
 import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound, designSiteHtml } from "./sites.js";
@@ -14,7 +13,7 @@ import { handleSocial, postInstagram, igConfigured } from "./social.js";
 import { handleYoutube, postYoutube, DEFAULT_CHANNEL as YT_CHANNEL } from "./youtube.js";
 import { seedTraining, getCurriculum } from "./training.js";
 
-const VERSION = "4.5.5";
+const VERSION = "4.5.3";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
