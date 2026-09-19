@@ -12,8 +12,9 @@ import { handleEdit, saveEditJob, ffmpegRecipe } from "./edit.js";
 import { handleCinema, createMovie, listMovies } from "./cinema.js";
 import { handleSocial, postInstagram, igConfigured } from "./social.js";
 import { handleYoutube, postYoutube, DEFAULT_CHANNEL as YT_CHANNEL } from "./youtube.js";
+import { seedTraining, getCurriculum } from "./training.js";
 
-const VERSION = "4.5.3";
+const VERSION = "4.5.4";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -516,7 +517,7 @@ export default {
       if (path === "/api/social" && method === "GET") {
         if (!vaultBound(env)) return jsonR({ links: {} });
         const project = url.searchParams.get("project") || "";
-        return jsonR({ ok: true, project, networks: SOCIAL, links: await readSocial(env, project), share: SOCIAL.map((s) => ({ ...s, share: shareUrl(s.id, url.searchParams.get("page") || "", url.searchParams.get("slug") || "") })) });
+        return jsonR({ ok: true, project, networks: SOCIAL, links: await readSocial(env, project), share: SOCIAL.map((s) => ({ ...s, share: shareUrl(s.id, url.searchParams.get("page") || "", url.searchParams.get("text") || "") })) });
       }
 
       if (path === "/api/grok" && method === "GET") {
