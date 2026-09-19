@@ -25,6 +25,10 @@ const corsH = {
   "Access-Control-Max-Age": "86400",
 };
 
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function jsonR(d, s = 200) {
   return new Response(JSON.stringify(d), { status: s, headers: { ...corsH, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
 }
@@ -512,7 +516,7 @@ export default {
       if (path === "/api/social" && method === "GET") {
         if (!vaultBound(env)) return jsonR({ links: {} });
         const project = url.searchParams.get("project") || "";
-        return jsonR({ ok: true, project, networks: SOCIAL, links: await readSocial(env, project), share: SOCIAL.map((s) => ({ ...s, share: shareUrl(s.id, url.searchParams.get("page") || "", url.searchParams.get("text") || "") })) });
+        return jsonR({ ok: true, project, networks: SOCIAL, links: await readSocial(env, project), share: SOCIAL.map((s) => ({ ...s, share: shareUrl(s.id, url.searchParams.get("page") || "", url.searchParams.get("slug") || "") })) });
       }
 
       if (path === "/api/grok" && method === "GET") {
