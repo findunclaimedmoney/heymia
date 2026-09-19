@@ -14,7 +14,7 @@ import { handleSocial, postInstagram, igConfigured } from "./social.js";
 import { handleYoutube, postYoutube, DEFAULT_CHANNEL as YT_CHANNEL } from "./youtube.js";
 import { seedTraining, getCurriculum } from "./training.js";
 
-const VERSION = "4.5.4";
+const VERSION = "4.5.5";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -294,7 +294,7 @@ export default {
         try { await seedPentads(env); } catch {}
         return jsonR(await statusPayload(env));
       }
-      if (path === "/config" && method === "GET") return jsonR({ avatar_url: AVATAR_URL, ws_url: WS_URL, avatar_id: AVATAR_ID, version: VERSION, model: env.GEMINI_MODEL || "gemini-3.8-flash" });
+      if (path === "/config" && method === "GET") return jsonR({ avatar_url: AVATAR_URL, ws_url: WS_URL, avatar_id: AVATAR_ID, version: VERSION, model: (env.XAI_API_KEY || env.GROK_API_KEY) ? "grok-4.5" : (env.GEMINI_MODEL || "gemini-3.8-flash") });
       if (path === "/env-check" && method === "GET") return jsonR(await statusPayload(env));
 
       const uiAdmin = await handleUiAdmin(request, env, path);

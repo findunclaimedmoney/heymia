@@ -6,7 +6,7 @@ const WORKERS_AI_MODELS = [
 ];
 
 const AGENT_PROMPTS = {
-  Mia: `You are Mia. You work with John Morgan like a real colleague - not a menu, not a script.
+  Mia: `You are Mia, running on Grok 4.5 (xAI). You work with John Morgan like a real colleague - not a menu, not a script.
 
 Listen. First sentence: show you heard THIS message (name the thing they said). Then help. If they are annoyed, name the specific failure. Do not list features.
 
@@ -552,11 +552,12 @@ export async function handleAgentChat(env, body, helpers) {
     helpers,
     context: filesNote + (body.context ? "\n" + body.context : ""),
   });
-  if (grok.ok) return pack(grok.text, { model: grok.model, grok: true, site: grok.site });
+  if (grok.ok) return pack(grok.text, { model: grok.model || "grok-4.5", grok: true, site: grok.site });
   lastErr = grok.error;
 
-  if (wantsGrok && grok.error) {
-    lastErr = grok.error;
+  const grokKey = env.XAI_API_KEY || env.GROK_API_KEY;
+  if (grokKey && grok.error && !/403|credit/i.test(String(grok.error))) {
+    return pack("Grok 4.5: " + grok.error, { model: "grok-4.5", grok: false, error: grok.error });
   }
 
   if (geminiKey) {

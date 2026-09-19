@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.5.1">
+<html lang="en" data-heymia-ui="4.5.5">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -101,7 +101,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
     <!-- Chat messages -->
     <div id="mia-chat" class="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
       <div class="msg-mia rounded-2xl rounded-tl-sm p-3 fade-in">
-        <div class="font-bold text-pink-400 text-[10px] mb-1">Mia</div>
+        <div class="font-bold text-pink-400 text-[10px] mb-1">Mia · Grok 4.5</div>
         Ready when you are. Say what you actually need — I'll pick it up from there.
       </div>
     </div>
@@ -873,7 +873,7 @@ const state = {
   liveavatarKey: localStorage.getItem('heymia_liveavatar') || '',
   elevenKey: localStorage.getItem('heymia_eleven') || '',
   openaiKey: localStorage.getItem('heymia_openai') || '',
-  miaMode: localStorage.getItem('heymia_mode') || 'plain',
+  miaMode: localStorage.getItem('heymia_mode') || 'grok',
   skills: JSON.parse(localStorage.getItem('heymia_skills') || '{"vault":true,"api":false,"deploy":false,"github":false}'),
   knowledge: JSON.parse(localStorage.getItem('heymia_knowledge') || '[]'),
   trainingNotes: JSON.parse(localStorage.getItem('heymia_training') || '[]'),
@@ -1108,7 +1108,7 @@ function addMia(text, role = 'mia') {
   const box = document.getElementById('mia-chat');
   const div = document.createElement('div');
   div.className = (role === 'user' ? 'msg-user ml-6' : 'msg-mia mr-4') + ' rounded-2xl p-3 fade-in';
-  div.innerHTML = `<div class="font-bold text-[10px] mb-1 ${role==='user'?'text-slate-400 text-right':'text-pink-400'}">${role==='user'?'You':'Mia'}</div>${escapeHtml(text)}`;
+  div.innerHTML = `<div class="font-bold text-[10px] mb-1 ${role==='user'?'text-slate-400 text-right':'text-pink-400'}">${role==='user'?'You':'Mia · Grok 4.5'}</div>${escapeHtml(text)}`;
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
 }
@@ -1173,7 +1173,10 @@ async function sendToMia(e) {
     companion: 'mia',
   });
   const chatUrls = [location.origin + '/api/chat'];
-  if (WORKER_BASE) chatUrls.push(WORKER_BASE.replace(/\/$/, '') + '/chat');
+  if (WORKER_BASE) {
+    const b = WORKER_BASE.replace(/\/$/, '');
+    chatUrls.push(b + '/api/chat', b + '/chat');
+  }
   try {
     for (const url of chatUrls) {
       try {
@@ -1201,39 +1204,11 @@ async function sendToMia(e) {
         return;
       } catch (e) {}
     }
-  } catch (e) { /* fall through to Gemini */ }
+  } catch (e) { /* try next */ }
 
-  // Gemini path
-  if (state.geminiKey) {
-    try {
-      const trainingContext = state.trainingNotes.length
-        ? '\n\nDaily training notes you must follow:\n' + state.trainingNotes.map(n => '- ' + n.text).join('\n')
-        : '';
-      const system = buildMiaSystem();
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${state.geminiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: system + '\n\nUser: ' + text }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 400 }
-        })
-      });
-      const data = await res.json();
-      // Remove the temporary "Thinking…" bubble
-      const box = document.getElementById('mia-chat');
-      if (box.lastChild && box.lastChild.textContent.includes('Thinking')) box.removeChild(box.lastChild);
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'I could not generate a reply. Check the Gemini key in Settings.';
-      addMia(reply);
-      speakMiaText(reply);
-    } catch (err) {
-      const box = document.getElementById('mia-chat');
-      if (box.lastChild && box.lastChild.textContent.includes('Thinking')) box.removeChild(box.lastChild);
-      addMia('Gemini request failed. Check your API key and network. Falling back to local help.');
-      localFallback(text);
-    }
-  } else {
-    localFallback(text);
-  }
+  const box = document.getElementById('mia-chat');
+  if (box.lastChild && box.lastChild.textContent.includes('Thinking')) box.lastChild.remove();
+  addMia('Grok 4.5 did not answer. I will not fall back to Gemini.');
 }
 
 function localFallback(text) {
