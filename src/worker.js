@@ -496,32 +496,37 @@ export default {
         const org = await organizeVault(env);
         return jsonR({ ok: true, ...seeded, marketing: mkt, organize: org });
       }
-      if (path === "/api/marketing" && method === "GET") {
-        if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
-        const project = url.searchParams.get("project") || "";
-        return jsonR({ ...(await listMarketing(env, project)), capcut: CAPCUT_FREE, kinds: MARKETING_KINDS, social: SOCIAL, links: project ? await readSocial(env, project) : {} });
-      }
-      if (path === "/api/marketing" && method === "POST") {
-        if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
-        const body = await request.json().catch(() => ({}));
-        if (body.action === "seed" || !body.name && !body.links && body.action !== "social") {
-          const mkt = await seedMarketing(env);
-          return jsonR(mkt);
-        }
-        if (body.action === "social" || body.links) {
-          return jsonR(await saveSocial(env, body.project, body.links));
-        }
-        return jsonR(await saveMarketing(env, body));
-      }
-      if (path === "/api/social" && method === "GET") {
-        if (!vaultBound(env)) return jsonR({ links: {} });
-        const project = url.searchParams.get("project") || "";
-        return jsonR({ ok: true, project, networks: SOCIAL, links: await readSocial(env, project), share: SOCIAL.map((s) => ({ ...s, share: shareUrl(s.id, url.searchParams.get("page") || "", url.searchParams.get("text") || "") })) });
-      }
+        if (path === "/api/marketing" && method === "POST") {
+    if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
+    const body = await request.json().catch(() => ({}));
+    if (body.action === "seed" || (!body.name && !body.links && body.action !== "social")) {
+      const mkt = await seedMarketing(env);
+      return jsonR(mkt);
+    }
+    if (body.action === "social" || body.links) {
+      return jsonR(await saveSocial(env, body.project, body.links));
+    }
+    return jsonR(await saveMarketing(env, body));
+  }
 
-      if (path === "/api/grok" && method === "GET") {
-        return jsonR({ ok: true, grok: !!(env.XAI_API_KEY || env.GROK_API_KEY), model: "grok-4.5" });
-      }
+  if (path === "/api/social" && method === "GET") {
+    if (!vaultBound(env)) return jsonR({ links: {} });
+    const project = url.searchParams.get("project") || "";
+    return jsonR({ 
+      ok: true, 
+      project, 
+      networks: SOCIAL, 
+      links: await readSocial(env, project), 
+      share: SOCIAL.map((s) => ({ 
+        ...s, 
+        share: shareUrl(s.id, url.searchParams.get("page") || "", url.searchParams.get("text") || "") 
+      })) 
+    });
+  }
+
+  if (path === "/api/grok" && method === "GET") {
+    return jsonR({ ok: true, grok: !!(env.XAI_API_KEY || env.GROK_API_KEY), model: "grok-4.5" });
+  }
       if (path === "/api/grok" && method === "POST") {
         const body = await request.json().catch(() => ({}));
         const status = await statusPayload(env);
