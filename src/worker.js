@@ -33,7 +33,7 @@ function jsonR(d, s = 200) {
   return new Response(JSON.stringify(d), { status: s, headers: { ...corsH, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
-const jobs = new Map();
+ jobs = new Map();
 const sessions = new Map();
 
 async function saveMem(e, a, c, k, v) {
@@ -280,11 +280,22 @@ function createJob(t, d) {
 }
 
 export default {
-  async fetch(request, env, ctx) {
+async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
     if (method === "OPTIONS") return new Response(null, { status: 204, headers: corsH });
+
+    if (path === "/api/internet" && method === "POST") {
+      const body = await request.json().catch(()=>({}));
+      const target = body.url;
+      if (!target) return jsonR({error:"url required"},400);
+      try {
+        const r = await fetch(target, {headers:{"User-Agent":"HeyMia/5.3"}});
+        const text = await r.text();
+        return jsonR({ok:true,url:target,status:r.status,content:text.substring(0,100000)});
+      } catch(e) { return jsonR({error:e.message},502); }
+    }
 
     try {
       if (path === "/health" || path === "/api/status" || (path === "/" && url.searchParams.get("format") === "json")) {
