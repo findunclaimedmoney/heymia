@@ -33,8 +33,8 @@ function jsonR(d, s = 200) {
   return new Response(JSON.stringify(d), { status: s, headers: { ...corsH, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
- jobs = new Map();
-const sessions = new Map();
+ const jobs = new Map();
+ const sessions = new Map();
 
 async function saveMem(e, a, c, k, v) {
   const rec = { value: v, t: Date.now(), agent: a, category: c, key: k };
