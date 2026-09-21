@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.5.5">
+<html lang="en" data-heymia-ui="4.5.6">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -126,7 +126,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
         </button>
         <input id="mia-input" type="text" placeholder="Tell Mia or tap mic…" 
           class="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-pink-500">
-        <button type="button" id="btn-voice-reply" onclick="toggleAutoVoice()" title="Mia speaks replies"
+        <button type="button" id="btn-voice-reply" onclick="toggleAutoVoice()" title="Mia speaks — free permanent voice, no ElevenLabs"
           class="p-2 rounded-xl glass-light text-[10px] font-bold text-slate-400 shrink-0">🔊</button>
         <button type="submit" class="px-3 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-xs font-bold shrink-0">Send</button>
       </form>
@@ -834,8 +834,16 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
         <input id="liveavatar-key-input" type="password" placeholder="LiveAvatar API key" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
       </div>
       <div>
-        <label class="text-[10px] text-slate-400 block mb-1">ElevenLabs <span id="rec-elevenlabs" class="text-slate-600">—</span></label>
-        <input id="eleven-key-input" type="password" placeholder="ElevenLabs xi-… or hex" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
+        <label class="text-[10px] text-slate-400 block mb-1">Mia voice (free, this device)</label>
+        <div class="flex gap-2">
+          <select id="mia-voice-select" onchange="lockMiaVoice(this.value)" class="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"></select>
+          <button type="button" onclick="testMiaVoice()" class="px-3 py-2 rounded-xl glass-light text-xs font-bold shrink-0">Test</button>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-1">Locked to one voice. Lives in the browser. No ElevenLabs bill. Ever.</p>
+      </div>
+      <div>
+        <label class="text-[10px] text-slate-400 block mb-1">ElevenLabs (optional — not used)</label>
+        <input id="eleven-key-input" type="password" placeholder="Not required. Mia already has a free voice." class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
       </div>
       <div>
         <label class="text-[10px] text-slate-400 block mb-1">OpenAI / other <span id="rec-openai" class="text-slate-600">—</span></label>
@@ -3221,7 +3229,7 @@ async function sendApiRequest() {
 
 
 // ========== VOICE I/O ==========
-state.autoVoice = localStorage.getItem('heymia_auto_voice') === '1';
+state.autoVoice = localStorage.getItem('heymia_auto_voice') !== '0';
 state.voiceListening = false;
 let _recognition = null;
 
@@ -3234,7 +3242,7 @@ function toggleAutoVoice() {
       ? 'p-2 rounded-xl bg-pink-500/30 text-[10px] font-bold text-pink-200 shrink-0'
       : 'p-2 rounded-xl glass-light text-[10px] font-bold text-slate-400 shrink-0';
   }
-  addMia(state.autoVoice ? 'Voice replies ON — I will speak and show text.' : 'Voice replies OFF — text only.');
+  addMia(state.autoVoice ? 'Voice ON. This is my free voice — locked on this device. No ElevenLabs.' : 'Voice replies OFF — text only.');
 }
 (function initVoiceBtn() {
   setTimeout(() => {
@@ -3301,25 +3309,9 @@ function toggleVoiceInput() {
 
 async function speakMiaText(text) {
   if (!text || !state.autoVoice) return;
-  if (!WORKER_BASE) return;
-  try {
-    const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text.slice(0, 500), companion: 'mia' }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'tts failed');
-    const audio = new Audio('data:audio/mpeg;base64,' + data.audio);
-    await audio.play();
-  } catch (e) {
-    // fallback: browser speech synthesis
-    try {
-      const u = new SpeechSynthesisUtterance(text.slice(0, 500));
-      u.rate = 1;
-      speakMia(u);
-    } catch {}
-  }
+  const clean = stripForSpeech(text);
+  if (!clean) return;
+  speakMia(clean);
 }
 
 function showPhoneLink() {
@@ -4709,21 +4701,77 @@ async function downloadLivePages() {
 }
 
 let _miaVoice = null;
-function pickMiaVoice() {
-  const voices = speechSynthesis.getVoices();
-  if (!voices.length) return null;
-  const preferred = ['Samantha','Victoria','Karen','Tessa','Moira','Fiona','Zira','Google UK English Female'];
-  for (const name of preferred) { const v = voices.find(v => v.name === name); if (v) return v; }
-  return voices.find(v => v.lang.startsWith('en') && /female/i.test(v.name)) || voices[0];
+const MIA_VOICE_NAMES = [
+  'Karen', 'Microsoft Catherine', 'Google UK English Female', 'Samantha',
+  'Microsoft Zira Desktop', 'Microsoft Zira', 'Victoria', 'Tessa', 'Moira',
+  'Fiona', 'Google US English', 'Microsoft Hazel',
+];
+function stripForSpeech(s) {
+  return String(s || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/[#*_`>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 1200);
 }
-if ('speechSynthesis' in window) { speechSynthesis.onvoiceschanged = () => { _miaVoice = pickMiaVoice(); }; _miaVoice = pickMiaVoice(); }
+function pickMiaVoice() {
+  if (!('speechSynthesis' in window)) return null;
+  const voices = speechSynthesis.getVoices() || [];
+  if (!voices.length) return null;
+  const saved = localStorage.getItem('heymia_mia_voice');
+  if (saved) {
+    const hit = voices.find(v => v.voiceURI === saved || v.name === saved);
+    if (hit) return hit;
+  }
+  for (const name of MIA_VOICE_NAMES) {
+    const v = voices.find(x => x.name === name || x.name.indexOf(name) === 0);
+    if (v) return v;
+  }
+  return voices.find(v => /^en(-|_)AU/i.test(v.lang))
+    || voices.find(v => /^en(-|_)GB/i.test(v.lang) && /female|woman|zira|hazel|karen|catherine/i.test(v.name))
+    || voices.find(v => v.lang && v.lang.indexOf('en') === 0 && /female|zira|samantha|karen/i.test(v.name))
+    || voices.find(v => v.lang && v.lang.indexOf('en') === 0)
+    || voices[0];
+}
+function fillMiaVoiceSelect() {
+  const sel = document.getElementById('mia-voice-select');
+  if (!sel || !('speechSynthesis' in window)) return;
+  const voices = (speechSynthesis.getVoices() || []).filter(v => !v.lang || v.lang.indexOf('en') === 0);
+  const cur = pickMiaVoice();
+  sel.innerHTML = voices.map(v =>
+    '<option value="' + escapeHtml(v.voiceURI) + '"' + (cur && v.voiceURI === cur.voiceURI ? ' selected' : '') + '>' +
+    escapeHtml(v.name + ' · ' + v.lang) + '</option>'
+  ).join('');
+}
+function lockMiaVoice(uri) {
+  localStorage.setItem('heymia_mia_voice', uri);
+  _miaVoice = (speechSynthesis.getVoices() || []).find(v => v.voiceURI === uri) || pickMiaVoice();
+  addMia('Voice locked: ' + (_miaVoice ? _miaVoice.name : 'default') + '. Permanent on this device. $0.');
+}
+function testMiaVoice() {
+  state.autoVoice = true;
+  localStorage.setItem('heymia_auto_voice', '1');
+  const btn = document.getElementById('btn-voice-reply');
+  if (btn) btn.className = 'p-2 rounded-xl bg-pink-500/30 text-[10px] font-bold text-pink-200 shrink-0';
+  speakMia("This is my voice. It stays on this device. No ElevenLabs. No monthly bill.");
+}
 function speakMia(text) {
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(typeof text === 'string' ? text : text.text);
+  const raw = typeof text === 'string' ? text : (text && text.text) || '';
+  const u = new SpeechSynthesisUtterance(stripForSpeech(raw));
+  _miaVoice = _miaVoice || pickMiaVoice();
   if (_miaVoice) u.voice = _miaVoice;
-  u.rate = 1.0; u.pitch = 1.1;
-  speakMia(u);
+  u.rate = 0.96;
+  u.pitch = 1.04;
+  u.lang = (_miaVoice && _miaVoice.lang) || 'en-AU';
+  speechSynthesis.speak(u);
+}
+if ('speechSynthesis' in window) {
+  speechSynthesis.onvoiceschanged = () => { _miaVoice = pickMiaVoice(); fillMiaVoiceSelect(); };
+  _miaVoice = pickMiaVoice();
+  setTimeout(fillMiaVoiceSelect, 400);
 }
 </script>
 
