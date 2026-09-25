@@ -8,6 +8,7 @@ binding = "AI"
 [vars]
 PUBLIC_DOMAIN = "https://heymia.lensflow.au"
 GEMINI_MODEL = "gemini-3.8-flash"
+COMMERCIAL = "1"
 
 # Secrets (do not put values here):
 #   wrangler secret put GEMINI_API_KEY

@@ -14,8 +14,9 @@ import { handleSocial, postInstagram, igConfigured } from "./social.js";
 import { handleYoutube, postYoutube, DEFAULT_CHANNEL as YT_CHANNEL } from "./youtube.js";
 import { seedTraining, getCurriculum } from "./training.js";
 import { handleTts } from "./tts.js";
+import { handleLicense, commercialBlocked } from "./license.js";
 
-const VERSION = "4.5.7";
+const VERSION = "4.6.0";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -287,6 +288,12 @@ export default {
     const path = url.pathname;
     const method = request.method;
     if (method === "OPTIONS") return new Response(null, { status: 204, headers: corsH });
+
+    const licenseResponse = await handleLicense(request, env, path);
+    if (licenseResponse) return licenseResponse;
+    const blocked = await commercialBlocked(request, env, path);
+    if (blocked) return blocked;
+
 
     if (path === "/api/internet" && method === "POST") {
       const body = await request.json().catch(() => ({}));
