@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.5.7">
+<html lang="en" data-heymia-ui="4.6.1">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -839,7 +839,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
           <select id="mia-voice-select" onchange="lockMiaVoice(this.value)" class="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"></select>
           <button type="button" onclick="testMiaVoice()" class="px-3 py-2 rounded-xl glass-light text-xs font-bold shrink-0">Test</button>
         </div>
-        <p class="text-[10px] text-slate-500 mt-1">Australian woman, mid-20s. Natasha if this browser has her (Edge). Karen is pitched younger. Free. Locked.</p>
+        <p class="text-[10px] text-slate-500 mt-1">Natasha. Australian, mid-20s. The site speaks her. Not your browser list. No ElevenLabs.</p>
       </div>
       <div>
         <label class="text-[10px] text-slate-400 block mb-1">ElevenLabs (optional — not used)</label>
@@ -3311,6 +3311,20 @@ async function speakMiaText(text) {
   if (!text || !state.autoVoice) return;
   const clean = stripForSpeech(text);
   if (!clean) return;
+  try {
+    const res = await fetch((location.origin || '') + '/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ text: clean.slice(0, 500), voice: 'en-AU-NatashaNeural' }),
+    });
+    const data = await res.json();
+    if (data && data.audio) {
+      const audio = new Audio('data:audio/mpeg;base64,' + data.audio);
+      await audio.play();
+      return;
+    }
+  } catch (e) {}
   speakMia(clean);
 }
 
@@ -4784,7 +4798,7 @@ function testMiaVoice() {
   localStorage.setItem('heymia_auto_voice', '1');
   const btn = document.getElementById('btn-voice-reply');
   if (btn) btn.className = 'p-2 rounded-xl bg-pink-500/30 text-[10px] font-bold text-pink-200 shrink-0';
-  speakMia("G'day. I'm Mia. Australian, mid twenties. This voice stays, and it doesn't cost a thing.");
+  speakMiaText("G'day. I'm Mia. This is Natasha. Australian, mid twenties.");
 }
 function speakMia(text) {
   if (!('speechSynthesis' in window)) return;
