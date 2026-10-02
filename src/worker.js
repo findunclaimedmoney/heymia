@@ -16,8 +16,9 @@ import { seedTraining, getCurriculum } from "./training.js";
 import { handleTts } from "./tts.js";
 import { handleLicense, commercialBlocked } from "./license.js";
 import { partnerHtml, PARTNER } from "./partner.js";
+import { fanHtml, makeFanClip } from "./fan.js";
 
-const VERSION = "4.7.0";
+const VERSION = "4.8.0";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -317,6 +318,13 @@ export default {
         return jsonR(await statusPayload(env));
       }
       if (path === "/config" && method === "GET") return jsonR({ avatar_url: AVATAR_URL, ws_url: WS_URL, avatar_id: AVATAR_ID, version: VERSION, model: (env.XAI_API_KEY || env.GROK_API_KEY) ? "grok-4.5" : (env.GEMINI_MODEL || "gemini-3.8-flash") });
+      if (path === "/fan" || path === "/fanstudio") {
+        return new Response(fanHtml(), { headers: { ...corsH, "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+      }
+      if (path === "/api/fan" && method === "POST") {
+        const body = await request.json().catch(() => ({}));
+        return jsonR(await makeFanClip(env, body));
+      }
       if (path === "/partner" || path === "/stratton") {
         return new Response(partnerHtml(), { headers: { ...corsH, "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
       }
