@@ -14,6 +14,7 @@ export function magickPrompt(story, { quality } = {}) {
     "STORY:",
     String(story || "").slice(0, 1200),
     "Camera: slow dolly, breathing handheld, match-cut on eyes. Ending held 1 second.",
+    "Adults only. She invites him. Not forced.",
   ].join(" ");
 }
 
@@ -159,32 +160,33 @@ export async function generateClip(env, args, ctx) {
   const title = String(args.title || "Untitled clip").slice(0, 80);
   const story = String(args.story || args.prompt || args.premise || "").trim();
   if (!story) return { ok: false, error: "Need a story / prompt" };
-  const want4k = /4k/i.test(String(args.quality || args.resolution || ""));
-  const duration = want4k ? 8 : Math.min(15, Number(args.duration) || 12);
-  const prompt = magickPrompt(story, { quality: want4k ? "4k" : "1080p" });
+  const asked = String(args.engine || "veo").toLowerCase();
+  const useVeo = asked === "veo" || /4k/i.test(String(args.quality || args.resolution || ""));
+  const duration = useVeo ? 8 : Math.min(15, Number(args.duration) || 12);
+  const prompt = magickPrompt(story, { quality: useVeo ? "1080p" : "1080p" });
   const id = "job-" + crypto.randomUUID().slice(0, 8);
   const job = {
     id,
     title,
     slug: slugify(title),
     status: "queued",
-    engine: want4k ? "veo" : "grok-imagine-video-1.5",
-    quality: want4k ? "4k" : "1080p",
+    engine: useVeo ? "veo" : "grok-imagine-video-1.5",
+    quality: "1080p",
     duration,
     prompt,
     created: new Date().toISOString(),
-    note: want4k
-      ? "4K is Gemini Veo 3.1 (8s). Grok Imagine Video maxes at 1080p — we do not fake 4K by stretching."
-      : "Magical 1080p 15s on grok-imagine-video-1.5. Native 4K is Veo only.",
+    note: useVeo
+      ? "Rendering on Veo, not Grok Imagine. Explicit frames can still be refused by Veo."
+      : "Rendering on Grok Imagine Video. Explicit frames can still be refused.",
   };
   try {
-    if (want4k) {
+    if (useVeo) {
       const gem = env.GEMINI_API_KEY || env.GEMINI;
-      if (!gem) throw new Error("4K needs GEMINI_API_KEY (Veo 3.1). Grok video cannot do native 4K.");
-      job.op = await startVeo(gem, prompt, "4k");
+      if (!gem) throw new Error("Veo needs GEMINI_API_KEY.");
+      job.op = await startVeo(gem, prompt, "1080p");
     } else {
       const key = env.XAI_API_KEY || env.GROK_API_KEY;
-      if (!key) throw new Error("XAI_API_KEY not set — Mia cannot call Grok Imagine Video.");
+      if (!key) throw new Error("XAI_API_KEY not set.");
       job.op = await startXaiVideo(key, prompt, duration, "1080p");
     }
     job.status = "rendering";
@@ -206,7 +208,7 @@ export async function generateClip(env, args, ctx) {
       duration: job.duration,
       note: job.note,
       poll: "/api/clips/jobs/" + id,
-      message: "Mia started rendering “" + title + "”. Open Clips — it lands in clips/ when done.",
+      message: "Mia started rendering on " + job.engine + ".",
     };
   } catch (e) {
     job.status = "failed";
