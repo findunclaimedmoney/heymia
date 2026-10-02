@@ -164,7 +164,7 @@ export async function handleLicense(request, env, path) {
   return null;
 }
 
-const OPEN = new Set(["/license", "/api/license", "/health"]);
+const OPEN = new Set(["/license", "/api/license", "/health", "/partner", "/stratton", "/api/partner"]);
 
 export async function commercialBlocked(request, env, path) {
   if (!commercialOn(env)) return null;
