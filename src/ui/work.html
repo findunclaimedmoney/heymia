@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.6.1">
+<html lang="en" data-heymia-ui="4.9.2">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -410,7 +410,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
           <div class="flex items-start justify-between gap-3">
             <div>
               <h2 class="text-lg font-bold serif leading-tight">Clips</h2>
-              <p class="text-[11px] text-slate-400 mt-1">Mia renders here. Magical 1080p (Grok Imagine Video 1.5, 15s) or native 4K (Veo 3.1, 8s). Files live in <code class="text-pink-300">clips/</code> — play and download.</p>
+              <p class="text-[11px] text-slate-400 mt-1">Mia renders here on Grok Imagine. Video is 1080p, up to 15s. Stills go to <code class="text-pink-300">images/</code>. Veo is off.</p>
             </div>
             <div class="flex gap-2 shrink-0">
               <button onclick="refreshClips()" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Refresh</button>
@@ -422,10 +422,10 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
             <input id="clip-title" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm" value="Ash and Altar">
             <textarea id="clip-story" rows="5" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">A mother gives birth to a dragon and dies shielding her from a priest who names her witch. Years later the dragon returns. She does not burn the square. She lays her mother's iron pendant on the altar and waits until someone says the woman's name without the word witch. Rain. Guardian, not tyrant.</textarea>
             <div class="flex flex-wrap gap-2">
-              <button onclick="miaMakeClip('1080p')" class="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-xs font-bold">Mia · magical 1080p</button>
-              <button onclick="miaMakeClip('4k')" class="px-4 py-2 rounded-xl glass-light text-xs font-bold">Mia · native 4K (Veo, 8s)</button>
+              <button onclick="miaMakeClip('1080p')" class="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-xs font-bold">Mia · video 1080p</button>
+              <button onclick="miaMakeImage()" class="px-4 py-2 rounded-xl glass-light text-xs font-bold">Mia · still image</button>
             </div>
-            <div id="clip-job" class="text-[11px] text-slate-400">Grok Imagine max is 1080p. 4K is Veo only — we do not fake 4K by stretching.</div>
+            <div id="clip-job" class="text-[11px] text-slate-400">Video and stills both use Grok Imagine. 4K Veo is off.</div>
           </div>
           <div id="clips-drop" class="drop-zone border-2 border-dashed border-pink-500/30 rounded-2xl p-6 text-center cursor-pointer hover:border-pink-500">
             <p class="text-sm font-bold">Drop clips here</p>
@@ -2630,8 +2630,8 @@ async function miaMakeClip(quality) {
   const title = (document.getElementById('clip-title')?.value || 'Ash and Altar').trim();
   const story = (document.getElementById('clip-story')?.value || '').trim();
   const el = document.getElementById('clip-job');
-  if (el) el.textContent = 'Mia is calling ' + (quality === '4k' ? 'Veo 3.1 4K' : 'Grok Imagine Video 1.5') + '…';
-  addMia('Rendering “' + title + '” at ' + (quality === '4k' ? 'native 4K' : 'magical 1080p') + '. This is Mia, not a side generator.');
+  if (el) el.textContent = 'Mia is calling Grok Imagine Video 1.5…';
+  addMia('Rendering “' + title + '” at 1080p on Grok Imagine. Not Veo.');
   try {
     const rec = await (await fetch((WORKER_BASE || location.origin).replace(/\/$/, '') + '/api/clips/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2639,7 +2639,7 @@ async function miaMakeClip(quality) {
     })).json();
     if (!rec.ok) {
       if (el) el.textContent = rec.error || 'failed';
-      addMia('Mia could not render: ' + (rec.error || 'unknown') + '. If it is credits, add balance at console.x.ai (1080p) or Gemini billed Veo (4K).');
+      addMia('Mia could not render: ' + (rec.error || 'unknown') + '. If it mentions credits, add balance at console.x.ai.');
       return;
     }
     if (el) el.textContent = rec.message + ' · ' + (rec.note || '');
@@ -2647,6 +2647,28 @@ async function miaMakeClip(quality) {
   } catch (e) {
     if (el) el.textContent = e.message;
     addMia('Generate failed: ' + e.message);
+  }
+}
+async function miaMakeImage() {
+  const title = (document.getElementById('clip-title')?.value || 'Still').trim();
+  const story = (document.getElementById('clip-story')?.value || '').trim();
+  const el = document.getElementById('clip-job');
+  if (el) el.textContent = 'Mia is calling Grok Imagine for a still…';
+  try {
+    const rec = await (await fetch((WORKER_BASE || location.origin).replace(/\/$/, '') + '/api/images/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, prompt: story, aspect_ratio: '16:9' })
+    })).json();
+    if (!rec.ok) {
+      if (el) el.textContent = rec.error || 'failed';
+      addMia('Image failed: ' + (rec.error || 'unknown'));
+      return;
+    }
+    if (el) el.textContent = rec.message || 'Image saved.';
+    addMia((rec.message || 'Image ready.') + (rec.download ? '\n' + rec.download : ''));
+  } catch (e) {
+    if (el) el.textContent = e.message;
+    addMia('Image failed: ' + e.message);
   }
 }
 async function pollClipJob(id) {

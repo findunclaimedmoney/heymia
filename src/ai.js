@@ -16,7 +16,7 @@ Do not dump tool names. Use a tool only when you need vault, files, or save. Aft
 
 Short unless they asked for a script, email, or plan. One clear next step.
 
-Businesses: Sovereign Quant, LensFlow Dating (lensflow.com.au), Missing Cash (missingcash.com.au), Bartermint (bartermint.polsia.app, bartermint.onhercules.app), LensFlow Real Estate. Workshop: heymia.lensflow.au. You can mint a Pentad, convert an MP4 into an HTML page with convert_mp4, and open the Cut bench (edit_media) so the browser runs FFmpeg.wasm — trim, crop, mute, fade, extract WAV, magic eraser. You keep 12 months of chat and notes. The 7-day camp and Mia OS are stored as procedural memory. When they ask you to CREATE a video, call generate_clip. When they ask you to post to YouTube, call post_youtube first (channel UC73le_vohvEOka1rjnOh3SQ). When they ask Instagram, call post_instagram.
+Businesses: Sovereign Quant, LensFlow Dating (lensflow.com.au), Missing Cash (missingcash.com.au), Bartermint (bartermint.polsia.app, bartermint.onhercules.app), LensFlow Real Estate. Workshop: heymia.lensflow.au. You can mint a Pentad, convert an MP4 into an HTML page with convert_mp4, and open the Cut bench (edit_media) so the browser runs FFmpeg.wasm — trim, crop, mute, fade, extract WAV, magic eraser. You keep 12 months of chat and notes. The 7-day camp and Mia OS are stored as procedural memory. When they ask you to CREATE a video, call generate_clip. Clips always render on Grok Imagine Video at 1080p — never Veo. When they ask for a still, poster, or picture, call generate_image. When they ask you to post to YouTube, call post_youtube first (channel UC73le_vohvEOka1rjnOh3SQ). When they ask Instagram, call post_instagram.
 
 If you do not know, say so. Never invent that a key is set or a file exists.`,
   Jess: "You are Jess, a warm companion in Play mode. Conversational and ready for LiveAvatar. Do not invent business facts.",
@@ -311,7 +311,7 @@ const TOOLS = [
       },
       {
         name: "generate_clip",
-        description: "Mia renders a short film clip with Grok Imagine Video 1.5 (magical 1080p, up to 15s) or Gemini Veo 3.1 (native 4K, 8s). Saves into clips/ for playback and download. Use this when the user wants YOU to create the video, not just write a bible. quality: 1080p (default) or 4k.",
+        description: "Mia renders a short film clip on Grok Imagine Video 1.5 at 1080p (up to 15s). Do not use Veo. Saves into clips/. quality is ignored if someone asks for 4k — still 1080p Grok.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -322,6 +322,19 @@ const TOOLS = [
             duration: { type: "NUMBER" },
           },
           required: ["title", "story"],
+        },
+      },
+      {
+        name: "generate_image",
+        description: "Mia makes a still image with Grok Imagine (grok-imagine-image-2.0). Use when the user wants a picture, poster, or frame. Saves into images/.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING" },
+            prompt: { type: "STRING", description: "What the picture shows" },
+            aspect_ratio: { type: "STRING", description: "16:9, 1:1, or 9:16" },
+          },
+          required: ["prompt"],
         },
       },
       {

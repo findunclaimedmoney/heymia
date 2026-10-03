@@ -160,35 +160,28 @@ export async function generateClip(env, args, ctx) {
   const title = String(args.title || "Untitled clip").slice(0, 80);
   const story = String(args.story || args.prompt || args.premise || "").trim();
   if (!story) return { ok: false, error: "Need a story / prompt" };
-  const asked = String(args.engine || "veo").toLowerCase();
-  const useVeo = asked === "veo" || /4k/i.test(String(args.quality || args.resolution || ""));
-  const duration = useVeo ? 8 : Math.min(15, Number(args.duration) || 12);
-  const prompt = magickPrompt(story, { quality: useVeo ? "1080p" : "1080p" });
+  const want4k = /4k/i.test(String(args.quality || args.resolution || ""));
+  const duration = Math.min(15, Number(args.duration) || 12);
+  const prompt = magickPrompt(story, { quality: "1080p" });
   const id = "job-" + crypto.randomUUID().slice(0, 8);
   const job = {
     id,
     title,
     slug: slugify(title),
     status: "queued",
-    engine: useVeo ? "veo" : "grok-imagine-video-1.5",
+    engine: "grok-imagine-video-1.5",
     quality: "1080p",
     duration,
     prompt,
     created: new Date().toISOString(),
-    note: useVeo
-      ? "Rendering on Veo, not Grok Imagine. Explicit frames can still be refused by Veo."
-      : "Rendering on Grok Imagine Video. Explicit frames can still be refused.",
+    note: want4k
+      ? "4K Veo is off. Rendered on Grok Imagine Video at 1080p."
+      : "1080p on grok-imagine-video-1.5. Not Veo.",
   };
   try {
-    if (useVeo) {
-      const gem = env.GEMINI_API_KEY || env.GEMINI;
-      if (!gem) throw new Error("Veo needs GEMINI_API_KEY.");
-      job.op = await startVeo(gem, prompt, "1080p");
-    } else {
-      const key = env.XAI_API_KEY || env.GROK_API_KEY;
-      if (!key) throw new Error("XAI_API_KEY not set.");
-      job.op = await startXaiVideo(key, prompt, duration, "1080p");
-    }
+    const key = env.XAI_API_KEY || env.GROK_API_KEY;
+    if (!key) throw new Error("XAI_API_KEY not set — Mia cannot call Grok Imagine Video.");
+    job.op = await startXaiVideo(key, prompt, duration, "1080p");
     job.status = "rendering";
     await putJob(env, job);
     const loop = async () => {
@@ -218,7 +211,59 @@ export async function generateClip(env, args, ctx) {
   }
 }
 
+export async function generateImage(env, args) {
+  const prompt = String(args.prompt || args.story || args.title || "").trim();
+  if (!prompt) return { ok: false, error: "Need a prompt" };
+  const key = env.XAI_API_KEY || env.GROK_API_KEY;
+  if (!key) return { ok: false, error: "XAI_API_KEY not set — Mia cannot call Grok Imagine." };
+  const title = String(args.title || prompt).slice(0, 80);
+  const res = await fetch("https://api.x.ai/v1/images/generations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+    body: JSON.stringify({
+      model: "grok-imagine-image-2.0",
+      prompt: prompt.slice(0, 2000),
+      n: 1,
+      aspect_ratio: args.aspect_ratio || "16:9",
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data.error?.message || data.error || ("image HTTP " + res.status);
+    if (res.status === 403) return { ok: false, error: "XAI_API_KEY is set but xAI has no credits. Add balance at console.x.ai." };
+    return { ok: false, error: String(msg) };
+  }
+  const url = data.data?.[0]?.url || data.url || data.image?.url;
+  const b64 = data.data?.[0]?.b64_json;
+  if (!url && !b64) return { ok: false, error: "Grok Imagine returned no image", raw: data };
+  let bytes;
+  if (b64) bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  else {
+    const img = await fetch(url);
+    if (!img.ok) return { ok: false, error: "image download HTTP " + img.status, url };
+    bytes = await img.arrayBuffer();
+  }
+  const slug = slugify(title);
+  const fileKey = "images/" + slug + ".jpg";
+  if (env.VAULT) {
+    await env.VAULT.put(fileKey, bytes, { httpMetadata: { contentType: "image/jpeg" } });
+  }
+  return {
+    ok: true,
+    engine: "grok-imagine-image-2.0",
+    title,
+    key: fileKey,
+    url,
+    download: env.VAULT ? "/files?key=" + encodeURIComponent(fileKey) + "&download=1" : url,
+    message: "Mia made the still with Grok Imagine. It is in images/.",
+  };
+}
+
 export async function handleImagine(request, env, path, ctx) {
+  if (path === "/api/images/generate" && request.method === "POST") {
+    const body = await request.json().catch(() => ({}));
+    return generateImage(env, body);
+  }
   if (path === "/api/clips/generate" && request.method === "POST") {
     const body = await request.json().catch(() => ({}));
     const rec = await generateClip(env, body, ctx);
