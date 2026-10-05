@@ -211,8 +211,16 @@ export async function generateClip(env, args, ctx) {
   }
 }
 
-function hfToken(env) {
-  return env.HF_TOKEN || env.HUGGINGFACE_TOKEN || env.HUGGINGFACE_API_KEY || env.HF_API_TOKEN || "";
+export function hfToken(env) {
+  const names = ["HF_TOKEN", "HUGGINGFACE_TOKEN", "HUGGINGFACE_API_KEY", "HF_API_TOKEN", "HUGGINGFACE", "HUGGING_FACE_TOKEN", "HF_KEY"];
+  for (const name of names) {
+    if (typeof env[name] === "string" && env[name]) return env[name];
+  }
+  for (const name of Object.keys(env || {})) {
+    if (!/hugg|hf_token|hf_api|hf_key/i.test(name)) continue;
+    if (typeof env[name] === "string" && env[name]) return env[name];
+  }
+  return "";
 }
 
 async function saveStill(env, title, bytes, engine, extra) {
@@ -232,6 +240,22 @@ async function saveStill(env, title, bytes, engine, extra) {
   };
 }
 
+async function imageFromWorkersAI(env, prompt, title) {
+  if (!env.AI || typeof env.AI.run !== "function") return { ok: false, error: "Workers AI binding missing" };
+  try {
+    const result = await env.AI.run("@cf/black-forest-labs/flux-1-schnell", { prompt: prompt.slice(0, 1500) });
+    let bytes = null;
+    if (result instanceof ArrayBuffer) bytes = result;
+    else if (result && result.buffer && result.byteLength) bytes = result;
+    else if (result && typeof result.image === "string") bytes = Uint8Array.from(atob(result.image), (c) => c.charCodeAt(0));
+    else if (result && typeof result.arrayBuffer === "function") bytes = await result.arrayBuffer();
+    if (!bytes || !bytes.byteLength) return { ok: false, error: "Workers AI returned no image" };
+    return saveStill(env, title, bytes, "cloudflare-flux");
+  } catch (e) {
+    return { ok: false, error: String(e.message || e) };
+  }
+}
+
 async function imageFromHuggingFace(env, prompt, title) {
   const token = hfToken(env);
   if (!token) return { ok: false, error: "HF_TOKEN is not set on this Worker." };
@@ -249,7 +273,7 @@ async function imageFromHuggingFace(env, prompt, title) {
     let msg = err.slice(0, 300);
     try { msg = JSON.parse(err).error || msg; } catch {}
     if (res.status === 401 || res.status === 403) {
-      return { ok: false, error: "Hugging Face rejected the token. Create a new read token and save it on Cloudflare as HF_TOKEN." };
+      return { ok: false, error: "Hugging Face rejected the token. Save it on Cloudflare as HF_TOKEN." };
     }
     return { ok: false, error: "Hugging Face image HTTP " + res.status + (msg ? ": " + msg : "") };
   }
@@ -258,12 +282,20 @@ async function imageFromHuggingFace(env, prompt, title) {
   return saveStill(env, title, bytes, "FLUX.1-schnell");
 }
 
+async function stillFallback(env, prompt, title) {
+  const hf = await imageFromHuggingFace(env, prompt, title);
+  if (hf.ok) return hf;
+  const cf = await imageFromWorkersAI(env, prompt, title);
+  if (cf.ok) return { ...cf, note: hf.error || "" };
+  return { ok: false, error: [hf.error, cf.error].filter(Boolean).join(" · ") || "no image engine" };
+}
+
 export async function generateImage(env, args) {
   const prompt = String(args.prompt || args.story || args.title || "").trim();
   if (!prompt) return { ok: false, error: "Need a prompt" };
   const title = String(args.title || prompt).slice(0, 80);
   const key = env.XAI_API_KEY || env.GROK_API_KEY;
-  if (!key) return imageFromHuggingFace(env, prompt, title);
+  if (!key) return stillFallback(env, prompt, title);
   const res = await fetch("https://api.x.ai/v1/images/generations", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
@@ -277,10 +309,10 @@ export async function generateImage(env, args) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = data.error?.message || data.error || ("image HTTP " + res.status);
-    const hf = await imageFromHuggingFace(env, prompt, title);
-    if (hf.ok) return { ...hf, note: "Grok Imagine failed (" + msg + "). Used Hugging Face instead." };
-    if (res.status === 403) return { ok: false, error: "XAI_API_KEY is set but xAI has no credits. Hugging Face also failed: " + (hf.error || "no HF_TOKEN") };
-    return { ok: false, error: String(msg) + (hf.error ? " · HF: " + hf.error : "") };
+    const fallback = await stillFallback(env, prompt, title);
+    if (fallback.ok) return { ...fallback, note: "Grok Imagine failed (" + msg + ")." };
+    if (res.status === 403) return { ok: false, error: "xAI has no credits. Fallback failed: " + (fallback.error || "none") };
+    return { ok: false, error: String(msg) + (fallback.error ? " · " + fallback.error : "") };
   }
   const url = data.data?.[0]?.url || data.url || data.image?.url;
   const b64 = data.data?.[0]?.b64_json;

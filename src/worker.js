@@ -7,7 +7,7 @@ import { seedMarketing, listMarketing, saveMarketing, CAPCUT_FREE, MARKETING_KIN
 import { mintPentad, servePentad, pentadHtml, llmsRoot, seedPentads, listPentads } from "./pentad.js";
 import { appendChat, loadChat, saveFact, searchYear, yearBrief, pruneYear, memoryReport } from "./memory.js";
 import { convertMp4, handleClips, seedClipsFolder, listClips } from "./clips.js";
-import { generateClip, generateImage, handleImagine } from "./imagine.js";
+import { generateClip, generateImage, handleImagine, hfToken } from "./imagine.js";
 import { handleEdit, saveEditJob, ffmpegRecipe } from "./edit.js";
 import { handleCinema, createMovie, listMovies } from "./cinema.js";
 import { handleSocial, postInstagram, igConfigured } from "./social.js";
@@ -19,7 +19,7 @@ import { partnerHtml, PARTNER } from "./partner.js";
 import { fanHtml, makeFanClip } from "./fan.js";
 import { cut2Html } from "./cut2.js";
 
-const VERSION = "4.9.3";
+const VERSION = "4.9.4";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -220,7 +220,7 @@ async function statusPayload(env) {
     ai: env.AI ? "bound" : "missing",
     gemini: env.GEMINI_API_KEY || env.GEMINI ? "set" : "unset",
     grok: env.XAI_API_KEY || env.GROK_API_KEY ? "set" : "unset",
-    huggingface: (env.HF_TOKEN || env.HUGGINGFACE_TOKEN || env.HUGGINGFACE_API_KEY || env.HF_API_TOKEN) ? "set" : "unset",
+    huggingface: hfToken(env) ? "set" : "unset",
     liveavatar: env.LIVEAVATAR_API_KEY || env.LIVEAVATAR ? "set" : "unset",
     stripe: env.STRIPE_SECRET_KEY || env.STRIPE ? "set" : "unset",
     domain: env.PUBLIC_DOMAIN || null,
@@ -228,7 +228,7 @@ async function statusPayload(env) {
     secrets_configured: {
       liveavatar: !!(env.LIVEAVATAR_API_KEY || env.LIVEAVATAR),
       grok: !!(env.XAI_API_KEY || env.GROK_API_KEY),
-      huggingface: !!(env.HF_TOKEN || env.HUGGINGFACE_TOKEN || env.HUGGINGFACE_API_KEY || env.HF_API_TOKEN),
+      huggingface: !!hfToken(env),
       stripe: !!(env.STRIPE_SECRET_KEY || env.STRIPE),
       ai: !!(env.GEMINI_API_KEY || env.GEMINI),
       instagram: igConfigured(env),
