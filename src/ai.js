@@ -326,7 +326,7 @@ const TOOLS = [
       },
       {
         name: "generate_image",
-        description: "Mia makes a still image with Grok Imagine (grok-imagine-image-2.0). Use when the user wants a picture, poster, or frame. Saves into images/.",
+        description: "Mia makes a still image. Tries Grok Imagine first, then Hugging Face FLUX if HF_TOKEN is set and Grok fails. Saves into images/.",
         parameters: {
           type: "OBJECT",
           properties: {

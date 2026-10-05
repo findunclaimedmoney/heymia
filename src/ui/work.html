@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.2">
+<html lang="en" data-heymia-ui="4.9.3">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -806,7 +806,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
       <input id="secret-paste" type="text" autocomplete="off" placeholder="AIza…  sk_live_…  ghp_…  CF token  xi-…"
         class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-pink-500"
         oninput="onSecretPaste(this.value)">
-      <p id="secret-paste-hint" class="text-[10px] mt-1 text-slate-500">Gemini, Stripe, OpenAI, Anthropic, Groq, GitHub, Cloudflare, ElevenLabs, LiveAvatar, Worker URL.</p>
+      <p id="secret-paste-hint" class="text-[10px] mt-1 text-slate-500">Gemini, Stripe, OpenAI, Anthropic, Groq, GitHub, Cloudflare, Hugging Face (hf_), ElevenLabs, LiveAvatar.</p>
     </div>
     <div class="grid sm:grid-cols-2 gap-3">
       <div>
@@ -846,7 +846,8 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
         <input id="eleven-key-input" type="password" placeholder="Not required. Mia already has a free voice." class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
       </div>
       <div>
-        <label class="text-[10px] text-slate-400 block mb-1">OpenAI / other <span id="rec-openai" class="text-slate-600">—</span></label>
+        <p class="text-[10px] text-slate-500 mt-1">Stills can fall back to FLUX when Grok has no credit. Cloudflare secret name must be exactly <span class="text-pink-300">HF_TOKEN</span>. Do not paste that token into the browser.</p>
+        <label class="text-[10px] text-slate-400 block mb-1 mt-2">OpenAI / other <span id="rec-openai" class="text-slate-600">—</span></label>
         <input id="openai-key-input" type="password" placeholder="sk-…  sk-ant-…  gsk_…" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
       </div>
     </div>
@@ -1255,7 +1256,7 @@ function recogniseSecret(raw) {
   if (/^gsk_/.test(v)) return { id: 'openai', ok: true, label: 'Groq' };
   if (/^sk-proj-/.test(v) || /^sk-[A-Za-z0-9]{20,}$/.test(v)) return { id: 'openai', ok: true, label: 'OpenAI' };
   if (/^(ghp_|github_pat_|gho_|ghu_)/.test(v)) return { id: 'github', ok: true, label: 'GitHub token' };
-  if (/^xi[-_]?[A-Za-z0-9]{16,}$/i.test(v)) return { id: 'elevenlabs', ok: true, label: 'ElevenLabs' };
+  if (/^hf_[A-Za-z0-9]{10,}$/.test(v)) return { id: 'huggingface', ok: true, label: 'Hugging Face token — put it on Cloudflare as HF_TOKEN, not in this box' };
   if (/^[a-f0-9]{32}$/i.test(v)) return { id: 'cf_account', ok: true, label: 'Cloudflare Account ID' };
   if (/^[a-f0-9]{37}$/i.test(v)) return { id: 'cf_token', ok: true, label: 'Cloudflare Global API key' };
   if (/^[A-Za-z0-9_\-]{40,}$/.test(v) && !v.includes(' ')) return { id: 'cf_token', ok: true, label: 'Cloudflare API token (likely)' };
@@ -1286,7 +1287,7 @@ function onSecretPaste(val) {
   const rec = recogniseSecret(val);
   const hint = document.getElementById('secret-paste-hint');
   if (!val.trim()) {
-    if (hint) { hint.textContent = 'Gemini, Stripe, OpenAI, Anthropic, Groq, GitHub, Cloudflare, ElevenLabs, LiveAvatar, Worker URL.'; hint.className = 'text-[10px] mt-1 text-slate-500'; }
+    if (hint) { hint.textContent = 'Gemini, Stripe, OpenAI, Anthropic, Groq, GitHub, Cloudflare, Hugging Face, ElevenLabs, LiveAvatar.'; hint.className = 'text-[10px] mt-1 text-slate-500'; }
     return;
   }
   if (hint) {
@@ -1408,7 +1409,7 @@ async function checkWorkerEnv() {
       lines.push('', 'Worker did not return JSON. Deploy v3 so /api/status and /env-check work.');
     } else {
       const sc = data.secrets_configured || data.checks || {};
-      const keys = ['gemini', 'ai', 'liveavatar', 'stripe', 'workers_ai', 'vault'];
+      const keys = ['gemini', 'ai', 'grok', 'huggingface', 'liveavatar', 'stripe', 'workers_ai', 'vault'];
       keys.forEach((k) => {
         const v = sc[k] !== undefined ? sc[k] : data[k];
         if (v === undefined) return;

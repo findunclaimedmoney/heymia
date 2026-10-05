@@ -14,7 +14,7 @@ COMMERCIAL = "1"
 #   wrangler secret put GEMINI_API_KEY
 #   wrangler secret put STRIPE_SECRET_KEY
 #   wrangler secret put LIVEAVATAR_API_KEY
-#   wrangler secret put ELEVENLABS_API_KEY
+#   wrangler secret put HF_TOKEN
 #
 # Bindings — set IDs in the dashboard or uncomment after create:
 #   wrangler kv namespace create MEMORY

@@ -211,12 +211,59 @@ export async function generateClip(env, args, ctx) {
   }
 }
 
+function hfToken(env) {
+  return env.HF_TOKEN || env.HUGGINGFACE_TOKEN || env.HUGGINGFACE_API_KEY || env.HF_API_TOKEN || "";
+}
+
+async function saveStill(env, title, bytes, engine, extra) {
+  const slug = slugify(title);
+  const fileKey = "images/" + slug + ".jpg";
+  if (env.VAULT) {
+    await env.VAULT.put(fileKey, bytes, { httpMetadata: { contentType: "image/jpeg" } });
+  }
+  return {
+    ok: true,
+    engine,
+    title,
+    key: fileKey,
+    download: "/files?key=" + encodeURIComponent(fileKey) + "&download=1",
+    message: "Mia made the still with " + engine + ". It is in images/.",
+    ...extra,
+  };
+}
+
+async function imageFromHuggingFace(env, prompt, title) {
+  const token = hfToken(env);
+  if (!token) return { ok: false, error: "HF_TOKEN is not set on this Worker." };
+  const res = await fetch("https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + token,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ inputs: prompt.slice(0, 1500) }),
+  });
+  const type = res.headers.get("content-type") || "";
+  if (!res.ok || type.includes("json") || type.includes("text")) {
+    const err = await res.text().catch(() => "");
+    let msg = err.slice(0, 300);
+    try { msg = JSON.parse(err).error || msg; } catch {}
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, error: "Hugging Face rejected the token. Create a new read token and save it on Cloudflare as HF_TOKEN." };
+    }
+    return { ok: false, error: "Hugging Face image HTTP " + res.status + (msg ? ": " + msg : "") };
+  }
+  const bytes = await res.arrayBuffer();
+  if (!bytes.byteLength) return { ok: false, error: "Hugging Face returned an empty image." };
+  return saveStill(env, title, bytes, "FLUX.1-schnell");
+}
+
 export async function generateImage(env, args) {
   const prompt = String(args.prompt || args.story || args.title || "").trim();
   if (!prompt) return { ok: false, error: "Need a prompt" };
-  const key = env.XAI_API_KEY || env.GROK_API_KEY;
-  if (!key) return { ok: false, error: "XAI_API_KEY not set — Mia cannot call Grok Imagine." };
   const title = String(args.title || prompt).slice(0, 80);
+  const key = env.XAI_API_KEY || env.GROK_API_KEY;
+  if (!key) return imageFromHuggingFace(env, prompt, title);
   const res = await fetch("https://api.x.ai/v1/images/generations", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
@@ -230,8 +277,10 @@ export async function generateImage(env, args) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = data.error?.message || data.error || ("image HTTP " + res.status);
-    if (res.status === 403) return { ok: false, error: "XAI_API_KEY is set but xAI has no credits. Add balance at console.x.ai." };
-    return { ok: false, error: String(msg) };
+    const hf = await imageFromHuggingFace(env, prompt, title);
+    if (hf.ok) return { ...hf, note: "Grok Imagine failed (" + msg + "). Used Hugging Face instead." };
+    if (res.status === 403) return { ok: false, error: "XAI_API_KEY is set but xAI has no credits. Hugging Face also failed: " + (hf.error || "no HF_TOKEN") };
+    return { ok: false, error: String(msg) + (hf.error ? " · HF: " + hf.error : "") };
   }
   const url = data.data?.[0]?.url || data.url || data.image?.url;
   const b64 = data.data?.[0]?.b64_json;
@@ -253,7 +302,6 @@ export async function generateImage(env, args) {
     engine: "grok-imagine-image-2.0",
     title,
     key: fileKey,
-    url,
     download: env.VAULT ? "/files?key=" + encodeURIComponent(fileKey) + "&download=1" : url,
     message: "Mia made the still with Grok Imagine. It is in images/.",
   };
