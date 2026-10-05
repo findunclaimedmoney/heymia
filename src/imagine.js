@@ -212,12 +212,12 @@ export async function generateClip(env, args, ctx) {
 }
 
 export function hfToken(env) {
-  const names = ["HF_TOKEN", "HUGGINGFACE_TOKEN", "HUGGINGFACE_API_KEY", "HF_API_TOKEN", "HUGGINGFACE", "HUGGING_FACE_TOKEN", "HF_KEY"];
+  const names = ["HUGGERFACR_TOKEN", "HF_TOKEN", "HUGGINGFACE_TOKEN", "HUGGINGFACE_API_KEY", "HF_API_TOKEN", "HUGGINGFACE", "HUGGING_FACE_TOKEN", "HF_KEY"];
   for (const name of names) {
     if (typeof env[name] === "string" && env[name]) return env[name];
   }
   for (const name of Object.keys(env || {})) {
-    if (!/hugg|hf_token|hf_api|hf_key/i.test(name)) continue;
+    if (!/hugg|hugger|hf_token|hf_api|hf_key/i.test(name)) continue;
     if (typeof env[name] === "string" && env[name]) return env[name];
   }
   return "";
