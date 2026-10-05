@@ -4,7 +4,15 @@ function slugify(s) {
   return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "clip";
 }
 
-export function magickPrompt(story, { quality } = {}) {
+export function magickPrompt(story, { quality, look } = {}) {
+  if (look === "animation") {
+    return [
+      "Stylized children's animated film, warm Christmas light, soft shapes, cartoon characters, fully clothed,",
+      "gentle camera, no photoreal people, no logos, no watermark.",
+      "STORY:",
+      String(story || "").slice(0, 900),
+    ].join(" ");
+  }
   const four = String(quality || "").toLowerCase().includes("4k");
   return [
     "Cinematic myth, 2.39:1 anamorphic 35mm, 24fps, practical fire and rain,",
@@ -14,7 +22,6 @@ export function magickPrompt(story, { quality } = {}) {
     "STORY:",
     String(story || "").slice(0, 1200),
     "Camera: slow dolly, breathing handheld, match-cut on eyes. Ending held 1 second.",
-    "Adults only. She invites him. Not forced.",
   ].join(" ");
 }
 
@@ -161,8 +168,9 @@ export async function generateClip(env, args, ctx) {
   const story = String(args.story || args.prompt || args.premise || "").trim();
   if (!story) return { ok: false, error: "Need a story / prompt" };
   const want4k = /4k/i.test(String(args.quality || args.resolution || ""));
+  const look = args.look === "animation" ? "animation" : "";
   const duration = Math.min(15, Number(args.duration) || 12);
-  const prompt = magickPrompt(story, { quality: "1080p" });
+  const prompt = magickPrompt(story, { quality: "1080p", look });
   const id = "job-" + crypto.randomUUID().slice(0, 8);
   const job = {
     id,
@@ -339,6 +347,74 @@ export async function generateImage(env, args) {
   };
 }
 
+export function zacChristmasBeats() {
+  const look = "animation";
+  const duration = 12;
+  return [
+    {
+      title: "Zac and the Last Bar 1",
+      look,
+      duration,
+      story: "A cartoon boy in a winter jumper stands at a window full of Christmas lights. He whispers a promise to a jolly cartoon Santa that he will get to school on time every day. An electric-bike drawing sits on a wish card on the sill.",
+    },
+    {
+      title: "Zac and the Last Bar 2",
+      look,
+      duration,
+      story: "A cartoon tablet on the desk wakes up. A small friendly AI face, HeyMia, saves the promise into a folder and adds one daily task: switch the bedside radio on thirty minutes early.",
+    },
+    {
+      title: "Zac and the Last Bar 3",
+      look,
+      duration,
+      story: "Morning after morning the radio lights up by itself. The cartoon boy wakes, smiles, grabs his school bag and leaves. He never notices the tablet did it.",
+    },
+    {
+      title: "Zac and the Last Bar 4",
+      look,
+      duration,
+      story: "The night before the last school day. The cartoon boy and two friends play a racing game on the television until the clock reads 2am. He grins, sure the mornings are already handled.",
+    },
+    {
+      title: "Zac and the Last Bar 5",
+      look,
+      duration,
+      story: "He falls asleep and forgets to plug in the tablet. The battery shows two bars. HeyMia stays still to save power and cannot reach the radio. The electric-bike drawing on Santa's list starts to fade.",
+    },
+    {
+      title: "Zac and the Last Bar 6",
+      look,
+      duration,
+      story: "The last battery bar blinks out. The room goes black. A simple title card fades up with the words To be continued.",
+    },
+  ];
+}
+
+export async function listJobs(env) {
+  if (!env.VAULT) return { ok: false, jobs: [], error: "VAULT unbound" };
+  const listed = await env.VAULT.list({ prefix: "clips/jobs/", limit: 30 });
+  const jobs = [];
+  for (const item of listed.objects || []) {
+    try {
+      const obj = await env.VAULT.get(item.key);
+      if (!obj) continue;
+      const j = JSON.parse(await obj.text());
+      jobs.push({
+        id: j.id,
+        title: j.title,
+        status: j.status,
+        error: j.error || "",
+        key: j.key || "",
+        engine: j.engine || "",
+        created: j.created || "",
+        download: j.download || "",
+      });
+    } catch {}
+  }
+  jobs.sort((a, b) => String(b.created).localeCompare(String(a.created)));
+  return { ok: true, jobs: jobs.slice(0, 12) };
+}
+
 export async function handleImagine(request, env, path, ctx) {
   if (path === "/api/images/generate" && request.method === "POST") {
     const body = await request.json().catch(() => ({}));
@@ -348,6 +424,9 @@ export async function handleImagine(request, env, path, ctx) {
     const body = await request.json().catch(() => ({}));
     const rec = await generateClip(env, body, ctx);
     return rec;
+  }
+  if (path === "/api/clips/jobs" && request.method === "GET") {
+    return listJobs(env);
   }
   if (path.startsWith("/api/clips/jobs/") && request.method === "GET") {
     const id = path.split("/").pop();

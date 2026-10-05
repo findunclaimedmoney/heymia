@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.3">
+<html lang="en" data-heymia-ui="4.9.7">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -410,7 +410,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
           <div class="flex items-start justify-between gap-3">
             <div>
               <h2 class="text-lg font-bold serif leading-tight">Clips</h2>
-              <p class="text-[11px] text-slate-400 mt-1">Mia renders here on Grok Imagine. Video is 1080p, up to 15s. Stills go to <code class="text-pink-300">images/</code>. Veo is off.</p>
+              <p class="text-[11px] text-slate-400 mt-1">A render is real only when a job appears here. Each part is about 12 seconds. Open this panel after you ask Mia for a clip.</p>
             </div>
             <div class="flex gap-2 shrink-0">
               <button onclick="refreshClips()" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Refresh</button>
@@ -1202,6 +1202,14 @@ async function sendToMia(e) {
         const reply = wdata.reply || wdata.response;
         if (!reply) continue;
         addMia(reply);
+        if (Array.isArray(wdata.clips) && wdata.clips.length) {
+          switchTool('clips');
+          const el = document.getElementById('clip-job');
+          if (el) el.textContent = wdata.clips.map((c) => (c.title || c.job_id || 'part') + ': ' + (c.error || c.status || 'started')).join(' · ');
+          wdata.clips.forEach((c) => {
+            if (c.job_id && c.ok !== false && c.status !== 'failed') pollClipJob(c.job_id);
+          });
+        }
         if (!state.miaTurns) state.miaTurns = [];
         state.miaTurns.push({ role: 'assistant', content: reply });
         persistMiaTurns();

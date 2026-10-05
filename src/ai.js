@@ -1,3 +1,4 @@
+import { zacChristmasBeats } from "./imagine.js";
 const PRIMARY = "gemini-3.8-flash";
 const FALLBACKS = ["gemini-3.6-flash", "gemini-2.5-flash"];
 const WORKERS_AI_MODELS = [
@@ -16,7 +17,7 @@ Do not dump tool names. Use a tool only when you need vault, files, or save. Aft
 
 Short unless they asked for a script, email, or plan. One clear next step.
 
-Businesses: Sovereign Quant, LensFlow Dating (lensflow.com.au), Missing Cash (missingcash.com.au), Bartermint (bartermint.polsia.app, bartermint.onhercules.app), LensFlow Real Estate. Workshop: heymia.lensflow.au. You can mint a Pentad, convert an MP4 into an HTML page with convert_mp4, and open the Cut bench (edit_media) so the browser runs FFmpeg.wasm — trim, crop, mute, fade, extract WAV, magic eraser. You keep 12 months of chat and notes. The 7-day camp and Mia OS are stored as procedural memory. When they ask you to CREATE a video, call generate_clip. Clips always render on Grok Imagine Video at 1080p — never Veo. When they ask for a still, poster, or picture, call generate_image. When they ask you to post to YouTube, call post_youtube first (channel UC73le_vohvEOka1rjnOh3SQ). When they ask Instagram, call post_instagram.
+Businesses: Sovereign Quant, LensFlow Dating (lensflow.com.au), Missing Cash (missingcash.com.au), Bartermint (bartermint.polsia.app, bartermint.onhercules.app), LensFlow Real Estate. Workshop: heymia.lensflow.au. You can mint a Pentad, convert an MP4 into an HTML page with convert_mp4, and open the Cut bench (edit_media) so the browser runs FFmpeg.wasm — trim, crop, mute, fade, extract WAV, magic eraser. You keep 12 months of chat and notes. The 7-day camp and Mia OS are stored as procedural memory. When they ask you to CREATE a video, the server starts generate_clip itself. Never say a clip is rendering, complete, or on a server unless a tool result includes a job_id. A movie bible is not a video. One render is at most 15 seconds. When they ask you to post to YouTube, call post_youtube first (channel UC73le_vohvEOka1rjnOh3SQ). When they ask Instagram, call post_instagram.
 
 If you do not know, say so. Never invent that a key is set or a file exists.`,
   Jess: "You are Jess, a warm companion in Play mode. Conversational and ready for LiveAvatar. Do not invent business facts.",
@@ -528,6 +529,31 @@ export async function handleAgentChat(env, body, helpers) {
   }
   const wantsSite = /\b(web\s?site|landing\s?page|web\s?page|microsite|build me a site|design (a |the )?site|create (a |the )?site|publish (a |the )?site)\b/i.test(lastUser);
   const wantsGrok = /\b(grok|troubleshoot|debug this|why (is|isn't|does|did)|form.?boundary|error 1014)\b/i.test(lastUser);
+  const thread = messages.map((m) => String(m.content || "")).join("\n");
+  const wantsClip = /\b(clip|video|animation|animated|song)\b/i.test(lastUser) && /\b(create|make|render|generate|film|produce)\b/i.test(lastUser);
+  const asksClip = /\b(where is (it|the clip|this)|have you completed|is it complete|when will|imaginary clip|can.?t see)\b/i.test(lastUser);
+  const zacStory = /zac|santa|christmas|ipad/i.test(thread);
+
+  if (helpers && helpers.runTool && (wantsClip || (asksClip && zacStory))) {
+    if (asksClip && !wantsClip) {
+      const listed = await helpers.runTool("list_clip_jobs", {});
+      const jobs = (listed && listed.jobs) || [];
+      if (jobs.length) {
+        const lines = jobs.slice(0, 8).map((j) => (j.title || j.id) + " — " + j.status + (j.error ? " — " + j.error : "") + (j.key ? " — " + j.key : ""));
+        return pack("These are the only clip jobs saved. If a title is not in this list, it was never started.\n" + lines.join("\n"), { model: "grok-4.5", clips: jobs, tools: true });
+      }
+    }
+    if (zacStory) {
+      const clips = [];
+      for (const beat of zacChristmasBeats()) {
+        const rec = await helpers.runTool("generate_clip", beat);
+        clips.push(Object.assign({ title: beat.title }, rec || { ok: false, error: "no result" }));
+        if (!rec || rec.ok === false) break;
+      }
+      const lines = clips.map((c, i) => c.ok ? (i + 1) + ". Started " + c.title + " · job " + c.job_id + " · " + c.status : (i + 1) + ". Stopped: " + (c.error || "failed"));
+      return pack("Nothing was rendering before this. I started " + clips.filter((c) => c.ok).length + " real parts, 12 seconds each. The engine cannot make one 90-second file. Open Clips. A part is finished only when its status is done.\n" + lines.join("\n"), { model: "grok-4.5", clips, tools: true });
+    }
+  }
 
   const contents = [];
   for (const m of messages.slice(-16)) {

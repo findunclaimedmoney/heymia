@@ -7,7 +7,7 @@ import { seedMarketing, listMarketing, saveMarketing, CAPCUT_FREE, MARKETING_KIN
 import { mintPentad, servePentad, pentadHtml, llmsRoot, seedPentads, listPentads } from "./pentad.js";
 import { appendChat, loadChat, saveFact, searchYear, yearBrief, pruneYear, memoryReport } from "./memory.js";
 import { convertMp4, handleClips, seedClipsFolder, listClips } from "./clips.js";
-import { generateClip, generateImage, handleImagine, hfToken } from "./imagine.js";
+import { generateClip, generateImage, handleImagine, hfToken, listJobs } from "./imagine.js";
 import { handleEdit, saveEditJob, ffmpegRecipe } from "./edit.js";
 import { handleCinema, createMovie, listMovies } from "./cinema.js";
 import { handleSocial, postInstagram, igConfigured } from "./social.js";
@@ -19,7 +19,7 @@ import { partnerHtml, PARTNER } from "./partner.js";
 import { fanHtml, makeFanClip } from "./fan.js";
 import { cut2Html } from "./cut2.js";
 
-const VERSION = "4.9.6";
+const VERSION = "4.9.7";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -423,6 +423,7 @@ export default {
             if (name === "list_movies") return listMovies(env);
             if (name === "list_clips") return listClips(env);
             if (name === "generate_clip") return generateClip(env, args, ctx);
+            if (name === "list_clip_jobs") return listJobs(env);
             if (name === "generate_image") return generateImage(env, args);
             if (name === "post_instagram") return postInstagram(env, args, ctx);
             if (name === "post_youtube") return postYoutube(env, args, ctx);
