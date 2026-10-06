@@ -571,31 +571,33 @@ export async function handleAgentChat(env, body, helpers) {
   const wantsGrok = /\b(grok|troubleshoot|debug this|why (is|isn't|does|did)|form.?boundary|error 1014)\b/i.test(lastUser);
   const thread = messages.map((m) => String(m.content || "")).join("\n");
   const wantsClip = /\b(clip|video|animation|animated|song)\b/i.test(lastUser) && /\b(create|make|render|generate|film|produce)\b/i.test(lastUser);
-  const asksClip = /\b(where is (it|the clip|this)|have you completed|is it complete|when will|imaginary clip|can.?t see)\b/i.test(lastUser);
-  const zacStory = /zac|santa|christmas|ipad/i.test(thread);
+  const asksClip = /\b(where|completed|complete|when will|imaginary|can.?t see|status)\b/i.test(lastUser);
+  const addedCredit = /credit/i.test(lastUser);
+  const zacStory = /zac|santa|christmas|ipad|clip|job-/i.test(thread);
 
-  if (tracked.runTool && (wantsClip || (asksClip && zacStory))) {
-    if (asksClip && !wantsClip) {
-      step("search", "Looked for clip jobs in the vault");
-      const listed = await tracked.runTool("list_clip_jobs", {});
-      const jobs = (listed && listed.jobs) || [];
-      if (jobs.length) {
-        const lines = jobs.slice(0, 8).map((j) => (j.title || j.id) + " — " + j.status + (j.error ? " — " + j.error : "") + (j.key ? " — " + j.key : ""));
-        return pack("These are the only clip jobs saved. If a title is not in this list, it was never started.\n" + lines.join("\n"), { model: "grok-4.5", clips: jobs, tools: true });
-      }
-      step("note", "No clip jobs in the vault");
+  if (tracked.runTool && zacStory && (wantsClip || asksClip || addedCredit)) {
+    step("search", "Checking clip jobs with the video engine");
+    const listed = await tracked.runTool("refresh_clip_jobs", {});
+    const jobs = ((listed && listed.jobs) || []).filter((j) => /last bar|zac/i.test(j.title || ""));
+    const live = jobs.filter((j) => j.status === "queued" || j.status === "rendering" || j.status === "done");
+    const linesOf = (list) => list.slice(0, 6).map((j) => (j.title || j.id) + " — " + j.status + (j.error ? " — " + j.error : "") + (j.key ? " — " + j.key : ""));
+    if (live.length && !(addedCredit && live.every((j) => j.status === "failed"))) {
+      step("note", live.length + " parts are already in the vault");
+      return pack("This is the live status. The players under this message update here. Finished parts play in the chat. A part is real only when it says done.\n" + linesOf(live).join("\n"), { model: "grok-4.5", clips: live.slice(0, 6), tools: true });
     }
-    if (zacStory) {
-      step("note", "Story matched. Starting real 12-second parts, not a script.");
-      const clips = [];
-      for (const beat of zacChristmasBeats()) {
-        const rec = await tracked.runTool("generate_clip", beat);
-        clips.push(Object.assign({ title: beat.title }, rec || { ok: false, error: "no result" }));
-        if (!rec || rec.ok === false) break;
-      }
-      const lines = clips.map((c, i) => c.ok ? (i + 1) + ". Started " + c.title + " · job " + c.job_id + " · " + c.status : (i + 1) + ". Stopped: " + (c.error || "failed"));
-      return pack("Nothing was rendering before this. I started " + clips.filter((c) => c.ok).length + " real parts, 12 seconds each. The engine cannot make one 90-second file. Open Clips. A part is finished only when its status is done.\n" + lines.join("\n"), { model: "grok-4.5", clips, tools: true });
+    if (jobs.length && !live.length && !addedCredit && !wantsClip) {
+      step("error", "Existing jobs failed. Not starting new ones.");
+      return pack("Nothing is rendering. These jobs failed:\n" + linesOf(jobs).join("\n"), { model: "grok-4.5", clips: jobs.slice(0, 6), tools: true });
     }
+    step("note", "No live parts. Starting six 12-second renders. Cartoon Zac wears the white t-shirt and the open white shirt with the dark leaf print.");
+    const clips = [];
+    for (const beat of zacChristmasBeats()) {
+      const rec = await tracked.runTool("generate_clip", beat);
+      clips.push(Object.assign({ title: beat.title }, rec || { ok: false, error: "no result" }));
+      if (!rec || rec.ok === false) break;
+    }
+    const lines = clips.map((c, i) => c.ok ? (i + 1) + ". " + c.title + " · " + c.job_id + " · " + c.status : (i + 1) + ". Stopped: " + (c.error || "failed"));
+    return pack("Started " + clips.filter((c) => c.ok).length + " real parts. They stay in this chat and update until each one plays. Not one 90-second file.\n" + lines.join("\n"), { model: "grok-4.5", clips, tools: true });
   }
 
   const contents = [];

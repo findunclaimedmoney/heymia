@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.8">
+<html lang="en" data-heymia-ui="4.9.9">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1120,6 +1120,59 @@ function addWorkLog(steps, ms) {
   box.scrollTop = box.scrollHeight;
 }
 
+function clipPlayUrl(c) {
+  const raw = c.download || (c.key ? ('/files?key=' + encodeURIComponent(c.key)) : '');
+  if (!raw) return '';
+  const base = (WORKER_BASE || location.origin).replace(/\/$/, '');
+  return base + raw.replace(/([?&])download=1&?/, '$1').replace(/[?&]$/, '');
+}
+function mountClipVideo(row, job) {
+  if (row.querySelector('video')) return;
+  const src = clipPlayUrl(job);
+  if (!src) return;
+  const v = document.createElement('video');
+  v.controls = true;
+  v.playsInline = true;
+  v.className = 'w-full rounded-lg mt-2 bg-black';
+  v.src = src;
+  row.appendChild(v);
+  const status = row.querySelector('.clip-status');
+  if (status) status.textContent = 'done · playing in this chat';
+}
+async function watchClipRow(row, id) {
+  const status = row.querySelector('.clip-status');
+  const base = (WORKER_BASE || location.origin).replace(/\/$/, '');
+  for (let i = 0; i < 45; i++) {
+    await new Promise((r) => setTimeout(r, 4000));
+    try {
+      const j = await (await fetch(base + '/api/clips/jobs/' + id)).json();
+      if (status) status.textContent = (j.status || '…') + (j.error ? ' — ' + j.error : '') + (j.engine ? ' · ' + j.engine : '');
+      if (j.status === 'done') { mountClipVideo(row, j); return; }
+      if (j.status === 'failed') return;
+    } catch (e) {}
+  }
+  if (status && !row.querySelector('video')) status.textContent += ' · still waiting. Ask Mia "where is it" to refresh.';
+}
+function showClipBoard(clips) {
+  const list = Array.isArray(clips) ? clips : [];
+  if (!list.length) return;
+  const box = document.getElementById('mia-chat');
+  if (!box) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'mr-4 mb-2 space-y-2';
+  list.forEach((c) => {
+    const row = document.createElement('div');
+    row.className = 'rounded-xl border border-white/10 bg-white/5 p-2 text-[11px]';
+    const id = c.job_id || c.id || '';
+    row.innerHTML = '<div class="font-semibold text-slate-200">' + escapeHtml(c.title || id || 'part') + '</div><div class="clip-status text-slate-400">' + escapeHtml((c.status || c.error || 'started') + (id ? ' · ' + id : '')) + '</div>';
+    wrap.appendChild(row);
+    if (c.key || c.download) mountClipVideo(row, c);
+    else if (id && c.status !== 'failed' && c.ok !== false) watchClipRow(row, id);
+  });
+  box.appendChild(wrap);
+  box.scrollTop = box.scrollHeight;
+}
+
 function addMia(text, role = 'mia') {
   try {
     const _t = String(arguments[0] || '');
@@ -1221,14 +1274,7 @@ async function sendToMia(e) {
         if (!reply) continue;
         addWorkLog(wdata.trace, wdata.worked_ms);
         addMia(reply);
-        if (Array.isArray(wdata.clips) && wdata.clips.length) {
-          switchTool('clips');
-          const el = document.getElementById('clip-job');
-          if (el) el.textContent = wdata.clips.map((c) => (c.title || c.job_id || 'part') + ': ' + (c.error || c.status || 'started')).join(' · ');
-          wdata.clips.forEach((c) => {
-            if (c.job_id && c.ok !== false && c.status !== 'failed') pollClipJob(c.job_id);
-          });
-        }
+        if (Array.isArray(wdata.clips) && wdata.clips.length) showClipBoard(wdata.clips);
         if (!state.miaTurns) state.miaTurns = [];
         state.miaTurns.push({ role: 'assistant', content: reply, trace: wdata.trace || [], worked_ms: wdata.worked_ms || 0 });
         persistMiaTurns();

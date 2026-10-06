@@ -178,6 +178,7 @@ export async function generateClip(env, args, ctx) {
     slug: slugify(title),
     status: "queued",
     engine: "grok-imagine-video-1.5",
+    look: look || "film",
     quality: "1080p",
     duration,
     prompt,
@@ -347,45 +348,48 @@ export async function generateImage(env, args) {
   };
 }
 
+const ZAC_LOOK = "Same cartoon boy in every shot: short dark curly hair, round face, soft smile, white t-shirt under an open short-sleeve white shirt with a dark leaf print, dark trousers. Stylized children's animation only. Not a photograph. Not a real child.";
+
 export function zacChristmasBeats() {
   const look = "animation";
   const duration = 12;
+  const boy = ZAC_LOOK + " ";
   return [
     {
       title: "Zac and the Last Bar 1",
       look,
       duration,
-      story: "A cartoon boy in a winter jumper stands at a window full of Christmas lights. He whispers a promise to a jolly cartoon Santa that he will get to school on time every day. An electric-bike drawing sits on a wish card on the sill.",
+      story: boy + "He stands at a window full of Christmas lights and whispers a promise to a jolly cartoon Santa that he will get to school on time every day. An electric-bike drawing sits on a wish card on the sill.",
     },
     {
       title: "Zac and the Last Bar 2",
       look,
       duration,
-      story: "A cartoon tablet on the desk wakes up. A small friendly AI face, HeyMia, saves the promise into a folder and adds one daily task: switch the bedside radio on thirty minutes early.",
+      story: boy + "A cartoon tablet on the desk wakes up. A small friendly AI face, HeyMia, saves the promise into a folder and adds one daily task: switch the bedside radio on thirty minutes early.",
     },
     {
       title: "Zac and the Last Bar 3",
       look,
       duration,
-      story: "Morning after morning the radio lights up by itself. The cartoon boy wakes, smiles, grabs his school bag and leaves. He never notices the tablet did it.",
+      story: boy + "Morning after morning the radio lights up by itself. He wakes, smiles, grabs his school bag and leaves. He never notices the tablet did it.",
     },
     {
       title: "Zac and the Last Bar 4",
       look,
       duration,
-      story: "The night before the last school day. The cartoon boy and two friends play a racing game on the television until the clock reads 2am. He grins, sure the mornings are already handled.",
+      story: boy + "The night before the last school day he and two cartoon friends play a racing game until the clock reads 2am. He grins, sure the mornings are already handled.",
     },
     {
       title: "Zac and the Last Bar 5",
       look,
       duration,
-      story: "He falls asleep and forgets to plug in the tablet. The battery shows two bars. HeyMia stays still to save power and cannot reach the radio. The electric-bike drawing on Santa's list starts to fade.",
+      story: boy + "He falls asleep and forgets to plug in the tablet. The battery shows two bars. HeyMia stays still to save power and cannot reach the radio. The electric-bike drawing on Santa's list starts to fade.",
     },
     {
       title: "Zac and the Last Bar 6",
       look,
       duration,
-      story: "The last battery bar blinks out. The room goes black. A simple title card fades up with the words To be continued.",
+      story: boy + "The last battery bar blinks out. The room goes black. A simple title card fades up with the words To be continued.",
     },
   ];
 }
@@ -401,18 +405,45 @@ export async function listJobs(env) {
       const j = JSON.parse(await obj.text());
       jobs.push({
         id: j.id,
+        job_id: j.id,
         title: j.title,
         status: j.status,
         error: j.error || "",
         key: j.key || "",
         engine: j.engine || "",
+        look: j.look || "",
         created: j.created || "",
         download: j.download || "",
+        ok: j.status !== "failed",
       });
     } catch {}
   }
   jobs.sort((a, b) => String(b.created).localeCompare(String(a.created)));
   return { ok: true, jobs: jobs.slice(0, 12) };
+}
+
+export async function refreshJobs(env) {
+  const listed = await listJobs(env);
+  const jobs = [];
+  for (const job of (listed.jobs || []).slice(0, 8)) {
+    if (!job.id || job.status === "done" || job.status === "failed") {
+      jobs.push(job);
+      continue;
+    }
+    const ticked = await tickJob(env, job.id);
+    jobs.push({
+      id: ticked.id || job.id,
+      job_id: ticked.id || job.id,
+      title: ticked.title || job.title,
+      status: ticked.status || job.status,
+      error: ticked.error || "",
+      key: ticked.key || "",
+      engine: ticked.engine || job.engine || "",
+      download: ticked.download || "",
+      ok: (ticked.status || job.status) !== "failed",
+    });
+  }
+  return { ok: true, jobs };
 }
 
 export async function handleImagine(request, env, path, ctx) {
