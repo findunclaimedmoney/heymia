@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.7">
+<html lang="en" data-heymia-ui="4.9.8">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1102,6 +1102,24 @@ async function askGrokTroubleshoot(question) {
 }
 
 // ========== MIA CHAT ==========
+function workDuration(ms) {
+  const s = Math.max(1, Math.round((Number(ms) || 0) / 1000));
+  if (s < 60) return s + 's';
+  return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+}
+function addWorkLog(steps, ms) {
+  const list = Array.isArray(steps) ? steps.filter(s => s && s.text) : [];
+  if (!list.length) return;
+  const box = document.getElementById('mia-chat');
+  if (!box) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'mr-4 my-1 text-[11px] text-slate-400';
+  const rows = list.map(s => '<div class="flex gap-2 py-0.5 leading-snug"><span class="text-slate-500 shrink-0">' + (s.kind === 'error' ? '!' : s.kind === 'tool' ? '▸' : s.kind === 'search' ? '?' : '·') + '</span><span>' + escapeHtml(s.text) + '</span></div>').join('');
+  wrap.innerHTML = '<button type="button" class="work-toggle flex items-center gap-1 text-slate-300 font-semibold" onclick="var n=this.nextElementSibling;n.classList.toggle(\'hidden\')">Worked for ' + workDuration(ms) + '</button><div class="work-steps mt-1 pl-2 border-l border-white/10 space-y-0.5">' + rows + '</div>';
+  box.appendChild(wrap);
+  box.scrollTop = box.scrollHeight;
+}
+
 function addMia(text, role = 'mia') {
   try {
     const _t = String(arguments[0] || '');
@@ -1201,6 +1219,7 @@ async function sendToMia(e) {
         if (box.lastChild && box.lastChild.textContent.includes('Thinking')) box.removeChild(box.lastChild);
         const reply = wdata.reply || wdata.response;
         if (!reply) continue;
+        addWorkLog(wdata.trace, wdata.worked_ms);
         addMia(reply);
         if (Array.isArray(wdata.clips) && wdata.clips.length) {
           switchTool('clips');
@@ -1211,7 +1230,7 @@ async function sendToMia(e) {
           });
         }
         if (!state.miaTurns) state.miaTurns = [];
-        state.miaTurns.push({ role: 'assistant', content: reply });
+        state.miaTurns.push({ role: 'assistant', content: reply, trace: wdata.trace || [], worked_ms: wdata.worked_ms || 0 });
         persistMiaTurns();
         speakMiaText(reply);
         if (wdata.site && wdata.site.url) {
@@ -1225,6 +1244,7 @@ async function sendToMia(e) {
 
   const box = document.getElementById('mia-chat');
   if (box.lastChild && box.lastChild.textContent.includes('Thinking')) box.lastChild.remove();
+  addWorkLog([{ kind: 'error', text: 'The Worker did not return JSON. Nothing was rendered.' }], 0);
   addMia('Grok 4.5 did not answer. I will not fall back to Gemini.');
 }
 
@@ -4449,13 +4469,19 @@ async function loadMiaHistory() {
     const res = await fetch((WORKER_BASE || location.origin).replace(/\/$/, '') + '/api/history?limit=80');
     if (res.ok) {
       const d = await res.json();
-      if (d.turns && d.turns.length) state.miaTurns = d.turns.map(t => ({ role: t.role, content: t.content }));
+      if (d.turns && d.turns.length) {
+        const localHasTrace = (state.miaTurns || []).some(t => t.trace && t.trace.length);
+        if (!localHasTrace) state.miaTurns = d.turns.map(t => ({ role: t.role, content: t.content }));
+      }
     }
   } catch (e) {}
   const box = document.getElementById('mia-chat');
   if (state.miaTurns && state.miaTurns.length && box) {
     box.innerHTML = '';
-    state.miaTurns.slice(-40).forEach(t => addMia(t.content, t.role === 'user' ? 'user' : 'mia'));
+    state.miaTurns.slice(-40).forEach(t => {
+      if (t.role !== 'user') addWorkLog(t.trace, t.worked_ms);
+      addMia(t.content, t.role === 'user' ? 'user' : 'mia');
+    });
   } else {
     addMia("I'm here. I keep a year of this chat. What's on your mind?");
   }

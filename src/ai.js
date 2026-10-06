@@ -447,9 +447,14 @@ function openaiTools() {
   });
 }
 
-export async function grokAssistant(env, { messages, system, helpers, context }) {
+export async function grokAssistant(env, { messages, system, helpers, context, step }) {
+  const note = typeof step === "function" ? step : () => {};
   const key = env.XAI_API_KEY || env.GROK_API_KEY;
-  if (!key) return { ok: false, error: "XAI_API_KEY not set" };
+  if (!key) {
+    note("error", "XAI_API_KEY is not set");
+    return { ok: false, error: "XAI_API_KEY not set" };
+  }
+  note("note", "Asked Grok 4.5");
   const msgs = [{ role: "system", content: system + (context ? "\n\n" + context : "") }];
   for (const m of (messages || []).slice(-16)) {
     msgs.push({
@@ -473,6 +478,7 @@ export async function grokAssistant(env, { messages, system, helpers, context })
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = data.error?.message || "xAI HTTP " + res.status;
+      note("error", msg);
       if (res.status === 403) {
         return { ok: false, error: "Grok 403: XAI_API_KEY is set but xAI has no credits. Add balance at console.x.ai — Mia stays on Gemini until then." };
       }
@@ -482,9 +488,14 @@ export async function grokAssistant(env, { messages, system, helpers, context })
     const calls = msg.tool_calls || [];
     if (!calls.length) {
       const text = String(msg.content || "").trim();
-      if (!text) return { ok: false, error: "Grok returned empty" };
+      if (!text) {
+        note("error", "Grok returned empty");
+        return { ok: false, error: "Grok returned empty" };
+      }
+      note("note", "Grok 4.5 answered");
       return { ok: true, text, model: "grok-4.5", site: lastSite };
     }
+    note("note", "Grok 4.5 asked for " + calls.length + " tool" + (calls.length === 1 ? "" : "s"));
     msgs.push({ role: "assistant", content: msg.content || "", tool_calls: calls });
     for (const call of calls) {
       let args = {};
@@ -500,6 +511,7 @@ export async function grokAssistant(env, { messages, system, helpers, context })
       });
     }
   }
+  note("error", "Grok tool loop exhausted");
   return { ok: false, error: "Grok tool loop exhausted" };
 }
 
@@ -518,6 +530,34 @@ export async function handleAgentChat(env, body, helpers) {
       ? [{ role: "user", content: String(body.message) }]
       : [];
   const agent = body.agent || (body.companion === "jess" || body.companion === "Jess" ? "Jess" : "Mia");
+  const started = Date.now();
+  const trace = [];
+  const step = (kind, text) => {
+    if (trace.length >= 24) return;
+    trace.push({ kind: kind || "note", text: String(text || "").slice(0, 240) });
+  };
+  step("note", "Read the message");
+  const tracked = Object.assign({}, helpers || {});
+  if (helpers && helpers.runTool) {
+    tracked.runTool = async (name, args) => {
+      const title = args && (args.title || args.name || args.key) ? " · " + (args.title || args.name || args.key) : "";
+      step("tool", "Called " + name + title);
+      let result;
+      try {
+        result = await helpers.runTool(name, args);
+      } catch (err) {
+        step("error", name + " failed: " + (err.message || err));
+        throw err;
+      }
+      const detail = result && (result.error || result.job_id || result.key || result.url || result.status || (result.ok === false ? "failed" : "ok"));
+      step(result && result.ok === false ? "error" : "note", name + " → " + String(detail || "done").slice(0, 180));
+      return result;
+    };
+  }
+  function pack(reply, extra) {
+    extra = extra || {};
+    return { reply, response: reply, agent, trace, worked_ms: Date.now() - started, ...extra };
+  }
   const system = getSystemPrompt(agent === "jess" || agent === "Jess" ? "Jess" : "Mia") + (body.yearMemory || "");
   let filesNote = "";
   const lastUser = String(messages.filter((m) => m.role !== "assistant").at(-1)?.content || "");
@@ -534,19 +574,22 @@ export async function handleAgentChat(env, body, helpers) {
   const asksClip = /\b(where is (it|the clip|this)|have you completed|is it complete|when will|imaginary clip|can.?t see)\b/i.test(lastUser);
   const zacStory = /zac|santa|christmas|ipad/i.test(thread);
 
-  if (helpers && helpers.runTool && (wantsClip || (asksClip && zacStory))) {
+  if (tracked.runTool && (wantsClip || (asksClip && zacStory))) {
     if (asksClip && !wantsClip) {
-      const listed = await helpers.runTool("list_clip_jobs", {});
+      step("search", "Looked for clip jobs in the vault");
+      const listed = await tracked.runTool("list_clip_jobs", {});
       const jobs = (listed && listed.jobs) || [];
       if (jobs.length) {
         const lines = jobs.slice(0, 8).map((j) => (j.title || j.id) + " — " + j.status + (j.error ? " — " + j.error : "") + (j.key ? " — " + j.key : ""));
         return pack("These are the only clip jobs saved. If a title is not in this list, it was never started.\n" + lines.join("\n"), { model: "grok-4.5", clips: jobs, tools: true });
       }
+      step("note", "No clip jobs in the vault");
     }
     if (zacStory) {
+      step("note", "Story matched. Starting real 12-second parts, not a script.");
       const clips = [];
       for (const beat of zacChristmasBeats()) {
-        const rec = await helpers.runTool("generate_clip", beat);
+        const rec = await tracked.runTool("generate_clip", beat);
         clips.push(Object.assign({ title: beat.title }, rec || { ok: false, error: "no result" }));
         if (!rec || rec.ok === false) break;
       }
@@ -575,11 +618,6 @@ export async function handleAgentChat(env, body, helpers) {
     generationConfig: { temperature: 0.9, maxOutputTokens: 8192 },
   };
 
-  function pack(reply, extra) {
-    extra = extra || {};
-    return { reply, response: reply, agent, ...extra };
-  }
-
   const geminiKey = env.GEMINI_API_KEY || env.GEMINI;
   const models = [env.GEMINI_MODEL || PRIMARY, ...FALLBACKS];
   let lastErr = null;
@@ -588,7 +626,8 @@ export async function handleAgentChat(env, body, helpers) {
   const grok = await grokAssistant(env, {
     messages,
     system,
-    helpers,
+    helpers: tracked,
+    step,
     context: filesNote + (body.context ? "\n" + body.context : ""),
   });
   if (grok.ok) return pack(grok.text, { model: grok.model || "grok-4.5", grok: true, site: grok.site });
@@ -600,6 +639,7 @@ export async function handleAgentChat(env, body, helpers) {
   }
 
   if (geminiKey) {
+    step("note", "Grok did not finish. Asking Gemini.");
     for (const model of models) {
       try {
         let data = await runGemini(geminiKey, model, payload);
@@ -612,7 +652,7 @@ export async function handleAgentChat(env, body, helpers) {
           }
           const fnParts = [];
           for (const call of calls) {
-            const result = await helpers.runTool(call.name, call.args || {});
+            const result = await tracked.runTool(call.name, call.args || {});
             if (result && result.url) lastToolSite = result;
             fnParts.push({ functionResponse: { name: call.name, response: result } });
           }
@@ -631,10 +671,10 @@ export async function handleAgentChat(env, body, helpers) {
     }
   }
 
-  if (wantsSite && helpers.runTool) {
+  if (wantsSite && tracked.runTool) {
     try {
       const nameMatch = lastUser.match(/(?:called|named|for)\s+([A-Z][\w\s]{1,40})/);
-      const site = await helpers.runTool("design_site", {
+      const site = await tracked.runTool("design_site", {
         name: (nameMatch && nameMatch[1].trim()) || "Studio",
         brief: lastUser.slice(0, 400),
         style: "ink",
