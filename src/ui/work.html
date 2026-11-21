@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.9">
+<html lang="en" data-heymia-ui="4.9.10">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -2067,7 +2067,7 @@ function showDeployResult(rec, opts) {
   const when = rec.at ? fmtWhen(rec.at) : new Date().toLocaleString();
   const title = ok ? 'DEPLOY SUCCESS' : 'DEPLOY FAILED';
   const detail = ok
-    ? (escapeHtml(rec.name || rec.action || 'build') + (rec.url ? ' · <a class="underline" target="_blank" rel="noopener" href="' + rec.url + '">' + escapeHtml(rec.url) + '</a>' : '') + ' · ' + when)
+    ? (escapeHtml(rec.name || rec.action || 'build') + (rec.note ? ' · ' + escapeHtml(rec.note) : '') + (rec.url ? ' · <a class="underline" target="_blank" rel="noopener" href="' + rec.url + '">' + escapeHtml(rec.url) + '</a>' : '') + ' · ' + when)
     : (escapeHtml(rec.error || 'Unknown error') + (rec.name ? ' · ' + escapeHtml(rec.name) : '') + ' · ' + when);
   const bar = document.getElementById('deploy-result');
   if (bar) {
@@ -2113,13 +2113,14 @@ async function loadLastDeploy() {
   try {
     const st = await (await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/status')).json();
     const last = st.last_deploy || {};
+    const r2off = /10042|enable R2/i.test(String(last.error || "") + String(st.vault || ""));
     const rec = {
-      ok: st.ok !== false && last.ok !== false,
-      name: 'heymia ' + (st.version || '') + (last.name ? ' · ' + last.name : ''),
-      action: last.action || 'git',
-      url: last.url || (st.domain || location.origin) + '/work',
+      ok: r2off ? true : (last.ok !== false),
+      name: r2off ? ("heymia " + (st.version || "") + " · git") : ("heymia " + (st.version || "") + (last.name ? " · " + last.name : "")),
+      action: last.action || "git",
+      url: last.url || (st.domain || location.origin) + "/work",
       at: last.at || new Date().toISOString(),
-      error: last.ok === false ? (last.error || '') : '',
+      error: r2off || last.ok !== false ? "" : (last.error || ""),
     };
     showDeployResult(rec, { silent: true });
     try { localStorage.setItem('heymia_last_deploy', JSON.stringify(rec)); } catch (e) {}
@@ -4687,7 +4688,7 @@ async function fillDeployCards() {
     box.innerHTML =
       cardHtml('Worker', escapeHtml(st.version || '—'), escapeHtml(st.service || 'heymia')) +
       cardHtml('Last ship', lastName, when + (lastUrl ? ' · ' + lastUrl : '')) +
-      cardHtml('Vault', escapeHtml(st.vault || '—'), st.ok ? 'bound' : 'check binding') +
+      cardHtml('Vault', escapeHtml(st.vault || '—'), st.vault === 'bound' ? 'ready' : 'R2 is off') +
       cardHtml('AI', escapeHtml(st.ai_model || '—'),
         (st.grok === 'set' ? 'Grok on' : 'Grok off') + ' · ' + (st.gemini === 'set' ? 'Gemini on' : 'Gemini off'));
     updateBuildBadge({ workUploaded: last.at, workActive: true });

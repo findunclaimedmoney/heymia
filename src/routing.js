@@ -26,28 +26,12 @@ export async function serveUI(env, r2Key, fallbackHtml, uiName, version) {
   const bundled = unwrapHtml(fallbackHtml);
   if (env.VAULT && r2Key) {
     try {
-      const head = await env.VAULT.head(r2Key);
-      const r2Ver = head && head.customMetadata && head.customMetadata.uiVersion;
-      if (!head || (version && r2Ver !== String(version))) {
-        await env.VAULT.put(r2Key, bundled, {
-          httpMetadata: { contentType: "text/html;charset=UTF-8" },
-          customMetadata: { uiVersion: String(version || ""), source: "git" },
-        });
-        const rec = {
-          ok: true,
-          action: "git_ui",
-          name: "worker-" + (version || uiName),
-          url: (env.PUBLIC_DOMAIN || "") + (uiName === "play" ? "/play" : "/work"),
-          error: "",
-          at: new Date().toISOString(),
-          verified: true,
-        };
-        try {
-          await env.VAULT.put("deploy/last.json", JSON.stringify(rec), {
-            httpMetadata: { contentType: "application/json" },
-          });
-          if (env.MEMORY) await env.MEMORY.put("deploy:last", JSON.stringify(rec));
-        } catch {}
+      const obj = await env.VAULT.get(r2Key);
+      if (obj) {
+        const stored = unwrapHtml(await obj.arrayBuffer());
+        if (stored && /<html[\s>]/i.test(stored) && stored.length > 20000) {
+          return htmlResponse(stored, uiName + "-r2", version);
+        }
       }
     } catch {}
   }

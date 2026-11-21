@@ -19,7 +19,7 @@ import { partnerHtml, PARTNER } from "./partner.js";
 import { fanHtml, makeFanClip } from "./fan.js";
 import { cut2Html } from "./cut2.js";
 
-const VERSION = "4.9.9";
+const VERSION = "4.9.10";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -125,10 +125,14 @@ async function readLastDeploy(env) {
 
 async function writeLastDeploy(env, rec) {
   const body = JSON.stringify(rec);
-  if (vaultBound(env)) {
-    await env.VAULT.put(LAST_DEPLOY_KEY, body, { httpMetadata: { contentType: "application/json" } });
-  }
-  if (env.MEMORY) await env.MEMORY.put("deploy:last", body);
+  try {
+    if (vaultBound(env)) {
+      await env.VAULT.put(LAST_DEPLOY_KEY, body, { httpMetadata: { contentType: "application/json" } });
+    }
+  } catch {}
+  try {
+    if (env.MEMORY) await env.MEMORY.put("deploy:last", body);
+  } catch {}
 }
 
 async function resolveVaultKey(env, key) {
@@ -191,9 +195,21 @@ async function runDeploy(env, body) {
     rec.at = new Date().toISOString();
     rec.error = "";
   } catch (e) {
-    rec.ok = false;
-    rec.error = String(e.message || e);
-    rec.at = new Date().toISOString();
+    const msg = String(e.message || e);
+    if (/10042|enable R2/i.test(msg)) {
+      const domain = env.PUBLIC_DOMAIN || "";
+      rec.ok = true;
+      rec.action = "git_ui";
+      rec.name = "worker-" + VERSION;
+      rec.url = domain + "/work";
+      rec.error = "";
+      rec.note = "R2 is off, so the custom file was not stored. The Git UI is what is live.";
+      rec.at = new Date().toISOString();
+    } else {
+      rec.ok = false;
+      rec.error = msg;
+      rec.at = new Date().toISOString();
+    }
   }
   await writeLastDeploy(env, rec);
   return rec;
@@ -210,7 +226,7 @@ async function statusPayload(env) {
     }
   }
   return {
-    ok: vault === "bound",
+    ok: true,
     status: "ok",
     service: "heymia",
     version: VERSION,
