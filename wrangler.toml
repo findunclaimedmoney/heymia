@@ -24,6 +24,9 @@ COMMERCIAL = "1"
 # binding = "MEMORY"
 # id = "your-kv-namespace-id"
 #
-[[r2_buckets]]
-binding = "VAULT"
-bucket_name = "heymia-vault"
+# R2 is off. Saves download in the browser instead of writing the vault.
+# Put this block back only after the account has clicked Enable R2 and the
+# bucket heymia-vault exists. Until then a VAULT binding returns error 10042.
+# [[r2_buckets]]
+# binding = "VAULT"
+# bucket_name = "heymia-vault"

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.10">
+<html lang="en" data-heymia-ui="4.9.11">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -289,12 +289,12 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
               <textarea id="mkt-brief" rows="3" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm" placeholder="Hook for Missing Cash unclaimed money… 15s Reel"></textarea>
               <div class="flex gap-2">
                 <button onclick="mktWriteScript()" class="flex-1 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-xs font-bold">Write script</button>
-                <button onclick="mktSaveScript()" class="flex-1 py-2 rounded-xl glass-light text-xs font-bold">Save to folder</button>
+                <button onclick="mktSaveScript()" class="flex-1 py-2 rounded-xl glass-light text-xs font-bold">Download script</button>
               </div>
               <textarea id="mkt-script" rows="8" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono" placeholder="Script / captions land here"></textarea>
               <div class="flex gap-2">
                 <button onclick="mktDrawPost()" class="flex-1 py-2 rounded-xl bg-emerald-600 text-xs font-bold">Make post still</button>
-                <button onclick="mktSavePost()" class="flex-1 py-2 rounded-xl glass-light text-xs font-bold">Save PNG</button>
+                <button onclick="mktSavePost()" class="flex-1 py-2 rounded-xl glass-light text-xs font-bold">Download PNG</button>
               </div>
               <canvas id="mkt-canvas" width="1080" height="1080" class="w-full rounded-xl border border-white/10 bg-black"></canvas>
               <div id="mkt-status" class="text-[11px] text-slate-400"></div>
@@ -305,7 +305,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
                 <textarea id="mkt-email-body" rows="5" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs" placeholder="Email body + CTA link"></textarea>
                 <div class="flex gap-2">
                   <button onclick="mktWriteEmail()" class="flex-1 py-2 rounded-xl bg-pink-600 text-xs font-bold">Write email</button>
-                  <button onclick="mktSaveEmail()" class="flex-1 py-2 rounded-xl glass-light text-xs font-bold">Save campaign</button>
+                  <button onclick="mktSaveEmail()" class="flex-1 py-2 rounded-xl glass-light text-xs font-bold">Download campaign</button>
                   <button onclick="mktMailTo()" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Open mail</button>
                 </div>
               </div>
@@ -2521,17 +2521,25 @@ async function mktWriteEmail() {
   }
 }
 
+function downloadLocal(filename, blob) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
 async function mktSaveEmail() {
   const subject = document.getElementById('mkt-email-subject').value || 'Campaign';
   const body = document.getElementById('mkt-email-body').value || '';
   const to = document.getElementById('mkt-email-to').value || '';
   const content = 'To: ' + to + '\nSubject: ' + subject + '\n\n' + body;
+  if (!body.trim() && !subject.trim()) return;
   const name = 'email-' + Date.now() + '.txt';
-  const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/marketing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ project: state.mktProject, kind: 'emails', name, content, type: 'text/plain;charset=UTF-8' }) });
-  const d = await res.json();
-  document.getElementById('mkt-status').textContent = d.ok ? 'Saved ' + d.key : (d.error || 'fail');
-  addMia(d.ok ? 'Email campaign filed in ' + d.key : 'Email save failed');
-  mktList();
+  downloadLocal(name, new Blob([content], { type: 'text/plain;charset=utf-8' }));
+  document.getElementById('mkt-status').textContent = 'Downloaded ' + name + ' to your browser download folder.';
 }
 
 function mktMailTo() {
@@ -2962,16 +2970,23 @@ async function mktWriteScript() {
   }
 }
 
-async function mktSaveScript() {
+function mktSaveScript() {
   const text = document.getElementById('mkt-script').value || '';
   if (!text.trim()) return;
   const name = 'script-' + Date.now() + '.txt';
-  const kind = (state.mktKind === 'posts' || state.mktKind === 'clips' || state.mktKind === 'videos' || state.mktKind === 'ads' || state.mktKind === 'stories') ? 'scripts' : state.mktKind;
-  const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/marketing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ project: state.mktProject, kind, name, content: text, type: 'text/plain;charset=UTF-8' }) });
-  const d = await res.json();
-  document.getElementById('mkt-status').textContent = d.ok ? 'Saved ' + d.key : (d.error || 'save failed');
-  addMia(d.ok ? 'Filed script into ' + d.key : 'Save failed');
-  mktList();
+  downloadLocal(name, new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  document.getElementById('mkt-status').textContent = 'Downloaded ' + name + '. It goes to the folder set in the browser download settings.';
+}
+
+function mktSavePost() {
+  mktDrawPost();
+  const c = document.getElementById('mkt-canvas');
+  const name = 'post-' + Date.now() + '.png';
+  c.toBlob((blob) => {
+    if (!blob) return;
+    downloadLocal(name, blob);
+    document.getElementById('mkt-status').textContent = 'Downloaded ' + name + '.';
+  }, 'image/png');
 }
 
 function mktDrawPost() {
@@ -3005,18 +3020,6 @@ function wrapCanvasText(ctx, text, x, y, maxW, lh) {
     else line = test;
   }
   ctx.fillText(line, x, yy);
-}
-
-async function mktSavePost() {
-  mktDrawPost();
-  const c = document.getElementById('mkt-canvas');
-  const data = c.toDataURL('image/png');
-  const name = 'post-' + Date.now() + '.png';
-  const res = await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/marketing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ project: state.mktProject, kind: 'posts', name, content: data, type: 'image/png' }) });
-  const d = await res.json();
-  document.getElementById('mkt-status').textContent = d.ok ? 'Saved ' + d.key : (d.error || 'save failed');
-  addMia(d.ok ? 'Post still filed in ' + d.key : 'PNG save failed');
-  mktList();
 }
 
 // ========== CAPCUT EDITOR ==========
