@@ -23,19 +23,7 @@ function htmlResponse(html, uiName, version) {
 }
 
 export async function serveUI(env, r2Key, fallbackHtml, uiName, version) {
-  const bundled = unwrapHtml(fallbackHtml);
-  if (env.VAULT && r2Key) {
-    try {
-      const obj = await env.VAULT.get(r2Key);
-      if (obj) {
-        const stored = unwrapHtml(await obj.arrayBuffer());
-        if (stored && /<html[\s>]/i.test(stored) && stored.length > 20000) {
-          return htmlResponse(stored, uiName + "-r2", version);
-        }
-      }
-    } catch {}
-  }
-  return htmlResponse(bundled, uiName + "-git", version);
+  return htmlResponse(unwrapHtml(fallbackHtml), uiName + "-git", version);
 }
 
 export async function handleUiAdmin(request, env, path) {
