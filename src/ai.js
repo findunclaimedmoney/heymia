@@ -534,7 +534,11 @@ export async function handleAgentChat(env, body, helpers) {
   const trace = [];
   const step = (kind, text) => {
     if (trace.length >= 24) return;
-    trace.push({ kind: kind || "note", text: String(text || "").slice(0, 240) });
+    const item = { kind: kind || "note", text: String(text || "").slice(0, 240) };
+    trace.push(item);
+    if (helpers && typeof helpers.onStep === "function") {
+      try { helpers.onStep(item); } catch {}
+    }
   };
   step("note", "Read the message");
   const tracked = Object.assign({}, helpers || {});

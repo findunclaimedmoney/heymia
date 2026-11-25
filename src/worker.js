@@ -19,7 +19,7 @@ import { partnerHtml, PARTNER } from "./partner.js";
 import { fanHtml, makeFanClip } from "./fan.js";
 import { cut2Html } from "./cut2.js";
 
-const VERSION = "4.9.17";
+const VERSION = "4.9.18";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -584,6 +584,39 @@ export default {
           const q = String((lastIncoming.filter((m) => m.role !== "assistant").at(-1) || {}).content || "");
           body.yearMemory = await yearBrief(env, agent, q);
         } catch {}
+        if (body.stream) {
+          const encoder = new TextEncoder();
+          const stream = new ReadableStream({
+            async start(controller) {
+              const send = (event, data) => {
+                controller.enqueue(encoder.encode("event: " + event + "\ndata: " + JSON.stringify(data) + "\n\n"));
+              };
+              helpers.onStep = (item) => send("step", item);
+              let result;
+              try {
+                result = await handleAgentChat(env, body, helpers);
+              } catch (err) {
+                result = { reply: "Mia failed: " + (err.message || err), trace: [], pending: false };
+              }
+              try {
+                const userTurn = lastIncoming.filter((m) => m.role !== "assistant").at(-1);
+                const saved = [];
+                if (userTurn) saved.push({ role: "user", content: userTurn.content });
+                if (result && (result.reply || result.response)) saved.push({ role: "assistant", content: result.reply || result.response });
+                if (saved.length) await appendChat(env, agent, saved);
+              } catch {}
+              send("done", result || {});
+              controller.close();
+            },
+          });
+          return new Response(stream, {
+            headers: {
+              ...corsH,
+              "Content-Type": "text/event-stream; charset=utf-8",
+              "Cache-Control": "no-cache",
+            },
+          });
+        }
         const result = await handleAgentChat(env, body, helpers);
         try {
           const userTurn = lastIncoming.filter((m) => m.role !== "assistant").at(-1);
