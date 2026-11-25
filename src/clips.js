@@ -150,15 +150,26 @@ export async function listClips(env) {
   return { ok: true, folder: "clips/", clips };
 }
 
-export async function saveClip(env, { name, body, type, title } = {}) {
+export async function saveClip(env, { name, body, type, title, size } = {}) {
   if (!vaultBound(env)) return { error: "VAULT unbound" };
   const file = String(name || title || "clip.mp4").replace(/^\/+/, "").split("/").pop();
   const base = slugify(file.replace(/\.[^.]+$/, ""));
   const ext = (file.match(/\.([a-z0-9]+)$/i) || [, "mp4"])[1].toLowerCase();
   const key = CLIPS_PREFIX + base + "." + ext;
-  await env.VAULT.put(key, body, { httpMetadata: { contentType: type || "video/mp4" } });
-  await env.VAULT.put("files/" + key, body, { httpMetadata: { contentType: type || "video/mp4" } });
-  return { ok: true, key, name: base + "." + ext, size: body.byteLength || body.length || 0, download: "/files?key=" + encodeURIComponent(key) + "&download=1" };
+  const meta = { httpMetadata: { contentType: type || "video/mp4" } };
+  const stream = body && typeof body.getReader === "function";
+  if (stream) {
+    const [a, b] = body.tee();
+    await Promise.all([
+      env.VAULT.put(key, a, meta),
+      env.VAULT.put("files/" + key, b, meta),
+    ]);
+  } else {
+    await env.VAULT.put(key, body, meta);
+    await env.VAULT.put("files/" + key, body, meta);
+  }
+  const len = Number(size) || body.byteLength || body.length || 0;
+  return { ok: true, key, name: base + "." + ext, size: len, download: "/files?key=" + encodeURIComponent(key) + "&download=1" };
 }
 
 export async function handleClips(request, env, path) {

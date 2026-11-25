@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.13">
+<html lang="en" data-heymia-ui="4.9.14">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1132,6 +1132,7 @@ function mountClipVideo(row, job) {
   if (!src) return;
   const v = document.createElement('video');
   v.controls = true;
+  v.preload = 'metadata';
   v.playsInline = true;
   v.className = 'w-full rounded-lg mt-2 bg-black';
   v.src = src;

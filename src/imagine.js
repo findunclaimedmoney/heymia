@@ -112,8 +112,13 @@ async function pollVeo(key, name) {
 async function storeFromUrl(env, job, url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error("download video HTTP " + res.status);
-  const buf = await res.arrayBuffer();
-  const saved = await saveClip(env, { name: job.slug + ".mp4", body: buf, type: "video/mp4", title: job.title });
+  const saved = await saveClip(env, {
+    name: job.slug + ".mp4",
+    body: res.body,
+    type: res.headers.get("content-type") || "video/mp4",
+    title: job.title,
+    size: Number(res.headers.get("content-length")) || 0,
+  });
   job.status = "done";
   job.key = saved.key;
   job.download = saved.download;

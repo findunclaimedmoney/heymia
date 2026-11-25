@@ -19,7 +19,7 @@ import { partnerHtml, PARTNER } from "./partner.js";
 import { fanHtml, makeFanClip } from "./fan.js";
 import { cut2Html } from "./cut2.js";
 
-const VERSION = "4.9.13";
+const VERSION = "4.9.14";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -133,6 +133,65 @@ async function writeLastDeploy(env, rec) {
   try {
     if (env.MEMORY) await env.MEMORY.put("deploy:last", body);
   } catch {}
+}
+
+function byteRange(header, size) {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(header || "").trim());
+  if (!m || !size) return null;
+  let start = m[1] === "" ? null : Number(m[1]);
+  let end = m[2] === "" ? null : Number(m[2]);
+  if (start == null && end != null) {
+    start = Math.max(0, size - end);
+    end = size - 1;
+  } else {
+    if (start == null) start = 0;
+    if (end == null || end >= size) end = size - 1;
+  }
+  if (start < 0 || start >= size || start > end) return { status: 416 };
+  const length = Math.min(end - start + 1, 1024 * 1024);
+  return { offset: start, length, end: start + length - 1, size };
+}
+
+async function locateVaultKey(env, key) {
+  if (!key || !env.VAULT) return null;
+  const raw = String(key).replace(/^\//, "");
+  const tries = [raw];
+  if (!raw.startsWith("files/") && !raw.startsWith("ui/") && !raw.startsWith("vault/") && !raw.startsWith("clips/")) {
+    tries.push("files/" + raw, "vault/" + raw, "ui/" + raw, "clips/" + raw, "files/clips/" + raw);
+  }
+  for (const k of tries) {
+    const head = await env.VAULT.head(k);
+    if (head) return { key: k, size: head.size || 0, type: head.httpMetadata?.contentType || "" };
+  }
+  return null;
+}
+
+async function fileObjectResponse(request, env, key, downloadName) {
+  const located = await locateVaultKey(env, key);
+  if (!located) return null;
+  const type = located.type || mimeOf(located.key);
+  const total = located.size || 0;
+  const headers = {
+    ...corsH,
+    "Content-Type": type,
+    "Accept-Ranges": "bytes",
+    "Cache-Control": "private, max-age=3600",
+  };
+  if (downloadName) headers["Content-Disposition"] = 'attachment; filename="' + downloadName.replace(/"/g, "") + '"';
+  const slice = request.headers.get("Range") && !downloadName ? byteRange(request.headers.get("Range"), total) : null;
+  if (slice && slice.status === 416) {
+    headers["Content-Range"] = "bytes */" + total;
+    return new Response(null, { status: 416, headers });
+  }
+  const obj = await env.VAULT.get(located.key, slice ? { range: { offset: slice.offset, length: slice.length } } : undefined);
+  if (!obj) return null;
+  if (!slice) {
+    if (total) headers["Content-Length"] = String(total);
+    return new Response(obj.body, { headers });
+  }
+  headers["Content-Range"] = "bytes " + slice.offset + "-" + slice.end + "/" + total;
+  headers["Content-Length"] = String(slice.length);
+  return new Response(obj.body, { status: 206, headers });
 }
 
 async function resolveVaultKey(env, key) {
@@ -485,17 +544,10 @@ export default {
         if (method === "GET") {
           const key = url.searchParams.get("key");
           if (key && vaultBound(env)) {
-            const found = await resolveVaultKey(env, key);
-            if (!found) return jsonR({ error: "not found" }, 404);
-            return new Response(found.obj.body, {
-              headers: {
-                ...corsH,
-                "Content-Type": found.obj.httpMetadata?.contentType || mimeOf(found.key),
-                ...(url.searchParams.get("download")
-                  ? { "Content-Disposition": 'attachment; filename="' + (found.key.split("/").pop() || "download").replace(/"/g, "") + '"' }
-                  : {}),
-              },
-            });
+            const name = url.searchParams.get("download") ? (key.split("/").pop() || "download") : "";
+            const file = await fileObjectResponse(request, env, key, name);
+            if (!file) return jsonR({ error: "not found" }, 404);
+            return file;
           }
           const cat = url.searchParams.get("category");
           const files = vaultBound(env) ? await listR2Files(env) : await listKvFiles(env, cat);
