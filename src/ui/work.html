@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.21">
+<html lang="en" data-heymia-ui="4.9.22">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -2873,6 +2873,7 @@ function paintCinema(m) {
       <div class="text-[11px] text-pink-300">${escapeHtml(prog.done || done.length)} / ${escapeHtml(String(prog.total || shots.length))} shots are files${prog.rendering ? ' · ' + prog.rendering + ' rendering' : ''}</div>
       <div class="flex flex-wrap gap-2">
         <button onclick="renderFilm('${escapeHtml(m.slug || '')}')" class="px-3 py-2 rounded-xl bg-pink-600 text-xs font-bold">Render the film</button>
+        <button onclick="retryFilm('${escapeHtml(m.slug || '')}')" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Retry failed</button>
         <button onclick="joinCinemaFilm()" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Join into one file</button>
         <button onclick="downloadBlenderScript()" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Blender script</button>
         <button onclick="renderFilm('${escapeHtml(m.slug || '')}', true)" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Stop queue</button>
@@ -2887,7 +2888,7 @@ function paintCinema(m) {
         <div class="text-[11px] text-slate-400 mt-1">${escapeHtml(s.purpose || '')}</div>
         ${s.dialogue ? '<div class="text-[12px] mt-2 italic">' + escapeHtml(s.dialogue) + '</div>' : ''}
         <div class="mt-2 space-y-1">${(s.shots || []).map((sh) =>
-          '<div class="text-[10px] text-slate-400"><span class="text-pink-300 font-bold">' + escapeHtml(sh.id) + '</span> ' + escapeHtml(sh.status || 'not started') + ' — ' + escapeHtml(sh.prompt) + '</div>'
+          '<div class="text-[10px] text-slate-400"><span class="text-pink-300 font-bold">' + escapeHtml(sh.id) + '</span> ' + escapeHtml(sh.status || 'not started') + (sh.error ? ' — <span class="text-amber-300">' + escapeHtml(sh.error) + '</span>' : '') + '</div>'
         ).join('')}</div>
       </div>`;
     }).join('');
@@ -2941,6 +2942,22 @@ async function listCinemaNow() {
       : 'No films yet — write one.';
   } catch (e) {
     box.textContent = 'Could not list films.';
+  }
+}
+
+async function retryFilm(slug) {
+  const st = document.getElementById('cin-status');
+  if (st) st.textContent = 'Retrying the failed shots…';
+  try {
+    const rec = await (await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/cinema', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'render', slug: slug || state.cinemaSlug, retry: true }),
+    })).json();
+    paintCinema(rec);
+    const err = ((rec.scenes || [])[0] && (rec.scenes[0].shots || []).map((s) => s.error).filter(Boolean)[0]) || '';
+    if (st) st.textContent = err || ((rec.progress ? rec.progress.rendering + ' rendering' : 'Retried'));
+  } catch (e) {
+    if (st) st.textContent = e.message;
   }
 }
 

@@ -461,6 +461,17 @@ export async function handleCinema(request, env, path, ctx) {
         return new Response(JSON.stringify(movie || { error: "not found" }), { status: 404, headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
       }
       if (body.action === "render") movie.render = body.stop ? false : true;
+      if (body.retry) {
+        for (const scene of movie.scenes || []) {
+          for (const shot of scene.shots || []) {
+            if (shot.status === "failed") {
+              shot.job_id = "";
+              shot.status = "";
+              shot.error = "";
+            }
+          }
+        }
+      }
       const rec = await advanceFilm(env, movie, ctx);
       const full = await getMovie(env, movie.slug);
       return new Response(JSON.stringify({ ...full, progress: rec.progress }), { headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
