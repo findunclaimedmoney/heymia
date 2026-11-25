@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.12">
+<html lang="en" data-heymia-ui="4.9.13">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1142,8 +1142,8 @@ function mountClipVideo(row, job) {
 async function watchClipRow(row, id) {
   const status = row.querySelector('.clip-status');
   const base = (WORKER_BASE || location.origin).replace(/\/$/, '');
-  for (let i = 0; i < 45; i++) {
-    await new Promise((r) => setTimeout(r, 4000));
+  for (let i = 0; i < 80; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
     try {
       const j = await (await fetch(base + '/api/clips/jobs/' + id)).json();
       if (status) status.textContent = (j.status || '…') + (j.error ? ' — ' + j.error : '') + (j.engine ? ' · ' + j.engine : '');

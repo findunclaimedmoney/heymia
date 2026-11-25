@@ -424,14 +424,10 @@ export async function listJobs(env) {
 
 export async function refreshJobs(env) {
   const listed = await listJobs(env);
-  const jobs = [];
-  for (const job of (listed.jobs || []).slice(0, 8)) {
-    if (!job.id || job.status === "done" || job.status === "failed") {
-      jobs.push(job);
-      continue;
-    }
+  const jobs = await Promise.all((listed.jobs || []).slice(0, 8).map(async (job) => {
+    if (!job.id || job.status === "done" || job.status === "failed") return job;
     const ticked = await tickJob(env, job.id);
-    jobs.push({
+    return {
       id: ticked.id || job.id,
       job_id: ticked.id || job.id,
       title: ticked.title || job.title,
@@ -441,8 +437,8 @@ export async function refreshJobs(env) {
       engine: ticked.engine || job.engine || "",
       download: ticked.download || "",
       ok: (ticked.status || job.status) !== "failed",
-    });
-  }
+    };
+  }));
   return { ok: true, jobs };
 }
 

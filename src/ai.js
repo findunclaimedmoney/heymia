@@ -583,19 +583,18 @@ export async function handleAgentChat(env, body, helpers) {
     const linesOf = (list) => list.slice(0, 6).map((j) => (j.title || j.id) + " — " + j.status + (j.error ? " — " + j.error : "") + (j.key ? " — " + j.key : ""));
     if (live.length && !(addedCredit && live.every((j) => j.status === "failed"))) {
       step("note", live.length + " parts are already in the vault");
-      return pack("This is the live status. The players under this message update here. Finished parts play in the chat. A part is real only when it says done.\n" + linesOf(live).join("\n"), { model: "grok-4.5", clips: live.slice(0, 6), tools: true });
+      return pack("Live. A player appears under a part only when it says done.\n" + linesOf(live).join("\n"), { model: "grok-4.5", clips: live.slice(0, 6), tools: true });
     }
     if (jobs.length && !live.length && !addedCredit && !wantsClip) {
       step("error", "Existing jobs failed. Not starting new ones.");
       return pack("Nothing is rendering. These jobs failed:\n" + linesOf(jobs).join("\n"), { model: "grok-4.5", clips: jobs.slice(0, 6), tools: true });
     }
     step("note", "No live parts. Starting six 12-second renders. Cartoon Zac wears the white t-shirt and the open white shirt with the dark leaf print.");
-    const clips = [];
-    for (const beat of zacChristmasBeats()) {
+    const beats = zacChristmasBeats();
+    const clips = await Promise.all(beats.map(async (beat) => {
       const rec = await tracked.runTool("generate_clip", beat);
-      clips.push(Object.assign({ title: beat.title }, rec || { ok: false, error: "no result" }));
-      if (!rec || rec.ok === false) break;
-    }
+      return Object.assign({ title: beat.title }, rec || { ok: false, error: "no result" });
+    }));
     const lines = clips.map((c, i) => c.ok ? (i + 1) + ". " + c.title + " · " + c.job_id + " · " + c.status : (i + 1) + ". Stopped: " + (c.error || "failed"));
     return pack("Started " + clips.filter((c) => c.ok).length + " real parts. They stay in this chat and update until each one plays. Not one 90-second file.\n" + lines.join("\n"), { model: "grok-4.5", clips, tools: true });
   }
