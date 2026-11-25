@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.19">
+<html lang="en" data-heymia-ui="4.9.20">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -2687,6 +2687,115 @@ const CINEMA_ENGINES = [
   { name:'Suno', url:'https://suno.com', use:'score' },
 ];
 
+async function loadJoinFFmpeg() {
+  if (window.__miaFfmpeg) return window.__miaFfmpeg;
+  const loadScript = (src) => new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Could not load ' + src));
+    document.head.appendChild(s);
+  });
+  if (!(window.FFmpegWASM && window.FFmpegWASM.FFmpeg) && !(window.FFmpeg && window.FFmpeg.FFmpeg)) {
+    await loadScript('https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js');
+  }
+  if (!window.FFmpegUtil) await loadScript('https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js');
+  const FFmpegCtor = (window.FFmpegWASM && window.FFmpegWASM.FFmpeg) || (window.FFmpeg && window.FFmpeg.FFmpeg);
+  const toBlobURL = window.FFmpegUtil && window.FFmpegUtil.toBlobURL;
+  if (!FFmpegCtor || !toBlobURL) throw new Error('FFmpeg.wasm did not load');
+  const ffmpeg = new FFmpegCtor();
+  const base = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+  await ffmpeg.load({
+    coreURL: await toBlobURL(base + '/ffmpeg-core.js', 'text/javascript'),
+    wasmURL: await toBlobURL(base + '/ffmpeg-core.wasm', 'application/wasm'),
+  });
+  window.__miaFfmpeg = ffmpeg;
+  return ffmpeg;
+}
+
+function cinemaShots(m) {
+  const shots = [];
+  ((m && m.scenes) || []).forEach((s) => (s.shots || []).forEach((sh) => shots.push(sh)));
+  return shots;
+}
+
+async function joinCinemaFilm() {
+  const st = document.getElementById('cin-status');
+  const m = state.cinemaMovie;
+  const done = cinemaShots(m).filter((sh) => sh.status === 'done' && (sh.key || sh.download));
+  if (done.length < 2) {
+    if (st) st.textContent = 'Need at least two finished shots. xAI still stops at 15 seconds a shot. Join sticks those shots into one file.';
+    return;
+  }
+  if (st) st.textContent = 'Joining ' + done.length + ' shots into one file…';
+  try {
+    const ffmpeg = await loadJoinFFmpeg();
+    let list = '';
+    for (let i = 0; i < done.length; i++) {
+      const name = 'p' + i + '.mp4';
+      const buf = new Uint8Array(await (await fetch(clipPlayUrl(done[i]))).arrayBuffer());
+      await ffmpeg.writeFile(name, buf);
+      list += "file '" + name + "'\n";
+    }
+    await ffmpeg.writeFile('list.txt', new TextEncoder().encode(list));
+    try {
+      await ffmpeg.exec(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', 'movie.mp4']);
+    } catch (e) {
+      await ffmpeg.exec(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c:v', 'libx264', '-c:a', 'aac', 'movie.mp4']);
+    }
+    const data = await ffmpeg.readFile('movie.mp4');
+    const blob = new Blob([data.buffer], { type: 'video/mp4' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (m.slug || 'heymia') + '.mp4';
+    a.click();
+    if (st) st.textContent = 'Downloaded one file from ' + done.length + ' shots. Each shot is still 15 seconds. xAI will not render 90 seconds in one call.';
+  } catch (e) {
+    if (st) st.textContent = 'Join failed: ' + (e.message || e);
+  }
+}
+
+function downloadBlenderScript() {
+  const m = state.cinemaMovie || {};
+  const shots = cinemaShots(m);
+  const seconds = m.seconds || shots.reduce((n, sh) => n + (Number(sh.dur) || 15), 0) || 90;
+  const frames = Math.round(seconds * 24);
+  const notes = (shots.length ? shots : [{ id: 's01-1', dur: seconds, prompt: m.premise || 'A short scene' }]).map((sh, i) => {
+    const start = shots.slice(0, i).reduce((n, x) => n + Math.round((Number(x.dur) || 15) * 24), 1);
+    return '# ' + sh.id + ' starts at frame ' + start + '\n# ' + String(sh.prompt || '').replace(/['\\]/g, '').slice(0, 180);
+  }).join('\n');
+  const py = [
+    'import bpy',
+    'scene = bpy.context.scene',
+    'scene.render.fps = 24',
+    'scene.frame_start = 1',
+    'scene.frame_end = ' + frames,
+    'scene.render.resolution_x = 1920',
+    'scene.render.resolution_y = 1080',
+    'if bpy.ops.object.select_all.poll():',
+    '    bpy.ops.object.select_all(action="SELECT")',
+    '    bpy.ops.object.delete()',
+    'bpy.ops.mesh.primitive_uv_sphere_add(location=(0, 0, 1))',
+    'hero = bpy.context.active_object',
+    'hero.name = "Hero"',
+    'bpy.ops.object.camera_add(location=(0, -6, 2), rotation=(1.2, 0, 0))',
+    'scene.camera = bpy.context.active_object',
+    'bpy.ops.object.light_add(type="AREA", location=(3, -2, 4))',
+    'hero.keyframe_insert(data_path="location", frame=1)',
+    'hero.location.x = 2',
+    'hero.keyframe_insert(data_path="location", frame=' + frames + ')',
+    'print("HeyMia timeline ' + seconds + 's")',
+    notes,
+  ].join('\n');
+  const blob = new Blob([py], { type: 'text/x-python' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (m.slug || 'heymia') + '.py';
+  a.click();
+  const st = document.getElementById('cin-status');
+  if (st) st.textContent = 'Blender script saved. On your PC run: blender -b -P ' + (m.slug || 'heymia') + '.py';
+}
+
 function renderCinema() {
   const box = document.getElementById('cin-engines');
   if (box) {
@@ -2751,6 +2860,7 @@ function paintCinema(m) {
   const board = document.getElementById('cin-board');
   if (!board || !m || !m.scenes) return;
   state.cinemaSlug = m.slug;
+  state.cinemaMovie = m;
   const yt = (m.viral && m.viral.youtube) || {};
   const shots = [];
   m.scenes.forEach((s) => (s.shots || []).forEach((sh) => shots.push(sh)));
@@ -2763,6 +2873,8 @@ function paintCinema(m) {
       <div class="text-[11px] text-pink-300">${escapeHtml(prog.done || done.length)} / ${escapeHtml(String(prog.total || shots.length))} shots are files${prog.rendering ? ' · ' + prog.rendering + ' rendering' : ''}</div>
       <div class="flex flex-wrap gap-2">
         <button onclick="renderFilm('${escapeHtml(m.slug || '')}')" class="px-3 py-2 rounded-xl bg-pink-600 text-xs font-bold">Render the film</button>
+        <button onclick="joinCinemaFilm()" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Join into one file</button>
+        <button onclick="downloadBlenderScript()" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Blender script</button>
         <button onclick="renderFilm('${escapeHtml(m.slug || '')}', true)" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Stop queue</button>
       </div>
       <div id="cin-player" class="space-y-2"></div>
