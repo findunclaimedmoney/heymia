@@ -573,7 +573,32 @@ export async function handleAgentChat(env, body, helpers) {
   const wantsClip = /\b(clip|video|animation|animated|song)\b/i.test(lastUser) && /\b(create|make|render|generate|film|produce)\b/i.test(lastUser);
   const asksClip = /\b(where|completed|complete|when will|imaginary|can.?t see|status)\b/i.test(lastUser);
   const addedCredit = /credit/i.test(lastUser);
-  const zacStory = /zac|santa|christmas|ipad|clip|job-/i.test(thread);
+  const secMatch = lastUser.match(/\b(30|45|60|75|90)\b/);
+  const wantsShort = /\banimat/i.test(lastUser) && /\b(make|create|render|generate)\b/i.test(lastUser) && (secMatch || /\b(short|video|film|clip)\b/i.test(lastUser));
+  if (wantsShort) {
+    step("note", "Starting an animated short. Shots are 8–15 seconds and play in order.");
+    const seconds = secMatch ? Math.max(30, Math.min(90, Number(secMatch[1]))) : 30;
+    const { createMovie, advanceFilm, getMovie } = await import("./cinema.js");
+    const made = await createMovie(env, {
+      seconds,
+      animated: true,
+      title: "Animated short",
+      premise: lastUser.slice(0, 700),
+      hero: /zac/i.test(lastUser) ? "Zac" : "the hero",
+    });
+    const movie = await getMovie(env, made.slug);
+    movie.render = true;
+    const advanced = await advanceFilm(env, movie, null);
+    const full = await getMovie(env, made.slug);
+    const shots = ((full.scenes || [])[0] || {}).shots || [];
+    const lines = shots.map((s) => s.id + " — " + (s.status || "queued") + (s.error ? " — " + s.error : ""));
+    return pack(
+      "Started a " + (full.seconds || seconds) + "s animated short. It is " + shots.length + " clips played in order, not one file. Open Cinema. A player appears as each shot says done.\n" + lines.join("\n"),
+      { model: "grok-4.5", cinema: full, progress: advanced.progress, tools: true }
+    );
+  }
+
+  const zacStory = /zac|santa|christmas|ipad|job-/i.test(thread);
 
   if (tracked.runTool && zacStory && (wantsClip || asksClip || addedCredit)) {
     step("search", "Checking clip jobs with the video engine");

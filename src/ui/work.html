@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.15">
+<html lang="en" data-heymia-ui="4.9.16">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -456,6 +456,11 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
                 <input id="cin-vibe" class="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs" placeholder="Vibe — wonder, dread, payoff">
               </div>
               <button onclick="createCinemaNow()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-xs font-bold">Write the 30-min bible</button>
+              <div class="flex gap-2">
+                <button onclick="startShort(30)" class="flex-1 py-2 rounded-xl glass-light text-xs font-bold">Animate 30s</button>
+                <button onclick="startShort(60)" class="flex-1 py-2 rounded-xl glass-light text-xs font-bold">Animate 60s</button>
+                <button onclick="startShort(90)" class="flex-1 py-2 rounded-xl glass-light text-xs font-bold">Animate 90s</button>
+              </div>
               <div id="cin-status" class="text-[11px] text-slate-400"></div>
             </div>
             <div class="glass rounded-2xl p-4 border border-white/10 space-y-2">
@@ -2594,6 +2599,29 @@ function renderCinema() {
     ).join('');
   }
   listCinemaNow();
+}
+
+async function startShort(seconds) {
+  const st = document.getElementById('cin-status');
+  if (st) st.textContent = 'Starting a ' + seconds + 's animated short…';
+  const payload = {
+    seconds,
+    animated: true,
+    start: true,
+    title: (document.getElementById('cin-title').value || '').trim() || ('Animated ' + seconds + 's'),
+    premise: (document.getElementById('cin-premise').value || '').trim() || 'A short animated story with a beginning, a turn, and a held ending.',
+    hero: (document.getElementById('cin-hero').value || '').trim() || 'the hero',
+  };
+  try {
+    const rec = await (await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/cinema', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    })).json();
+    if (st) st.textContent = rec.error || ((rec.progress ? rec.progress.done + '/' + rec.progress.total + ' done, ' + rec.progress.rendering + ' rendering' : 'Started') + ' · ' + (rec.seconds || seconds) + 's');
+    paintCinema(rec);
+    addMia(rec.error ? ('Short failed: ' + rec.error) : ('Animated short started. ' + ((rec.scenes && rec.scenes[0] && rec.scenes[0].shots) || []).length + ' shots. They play in order when each one says done.'));
+  } catch (e) {
+    if (st) st.textContent = e.message;
+  }
 }
 
 async function createCinemaNow() {

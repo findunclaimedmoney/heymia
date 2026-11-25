@@ -255,6 +255,67 @@ export function planMovie(input = {}) {
   };
 }
 
+export function planShort(input = {}) {
+  const seconds = Math.max(30, Math.min(90, Number(input.seconds) || 30));
+  const n = seconds <= 35 ? 3 : seconds <= 65 ? 5 : 6;
+  const dur = Math.min(15, Math.max(8, Math.round(seconds / n)));
+  const title = String(input.title || "Animated short").slice(0, 80);
+  const premise = String(input.premise || input.brief || "A short animated story with a beginning, a turn, and a held ending.").slice(0, 800);
+  const hero = String(input.hero || "the hero").slice(0, 48);
+  const slug = slugify(title + "-" + seconds + "s");
+  const lock = "Stylized children's animation, same face, same clothes, warm light, fully clothed, no text, no watermark, no logo.";
+  const actions = [
+    `${hero} enters in one clear pose. The place is simple and readable. ${premise}`,
+    `${hero} wants something and moves toward it. Same face, same clothes.`,
+    `A small obstacle stops ${hero}. They react. The style does not change.`,
+    `${hero} tries again a different way. Hold the same world.`,
+    `The turn. What ${hero} wanted costs one kind thing.`,
+    `Ending. ${hero} still. The point of the story is visible. Hold the last second.`,
+  ];
+  const shots = actions.slice(0, n).map((action, k) => ({
+    id: "s01-" + (k + 1),
+    dur,
+    camera: k % 2 ? "gentle push-in" : "locked wide",
+    motion: "slow and readable",
+    interrupt: "cut on the action",
+    prompt: action + " " + lock + " Shot " + (k + 1) + " of " + n + ". Continue the same character.",
+  }));
+  return {
+    ok: true,
+    slug,
+    title,
+    animated: true,
+    render: false,
+    logline: `${seconds}s animated short. ${hero}. ${premise.slice(0, 160)}`,
+    premise,
+    genre: "animation",
+    vibe: "warm",
+    runtime_min: 1,
+    runtime_sec: dur * n,
+    seconds: dur * n,
+    hero,
+    want: premise.slice(0, 80),
+    lock,
+    hook_3s: hero + " moves. No titles.",
+    hook_15s: title,
+    characters: [{ name: hero, look: "one design, never redesigned mid-film", voice: "none in the picture", want: "" }],
+    scenes: [{
+      id: "sc-01",
+      index: 1,
+      start: 0,
+      duration: dur * n,
+      fn: "short",
+      purpose: "One animated short, played in order. Not a 30-minute bible.",
+      location: "the story",
+      dialogue: "",
+      shots,
+    }],
+    viral: { youtube: { title: title + " — " + (dur * n) + "s animated short", description: premise } },
+    stitch: { note: "Shots render two at a time and play in order on this page.", ffmpeg: shots.map((s) => "file '" + s.id + ".mp4'").join("\n") },
+    created: new Date().toISOString(),
+  };
+}
+
 function midpointLabel(m) {
   const min = Math.floor(m * 0.5);
   return min + ":00";
@@ -302,7 +363,7 @@ export async function saveMovie(env, movie) {
 }
 
 export async function createMovie(env, input = {}) {
-  const movie = planMovie(input);
+  const movie = input.seconds || input.animated || input.short ? planShort(input) : planMovie(input);
   return saveMovie(env, movie);
 }
 
@@ -358,7 +419,7 @@ export async function advanceFilm(env, movie, ctx) {
         title: (movie.slug || "film") + " " + shot.id,
         story: shot.prompt,
         duration: Math.min(15, Math.max(5, Number(shot.dur) || 10)),
-        look: "",
+        look: movie.animated ? "animation" : "",
       }, ctx);
       shot.job_id = rec.job_id || "";
       shot.status = rec.ok ? "rendering" : "failed";
@@ -405,7 +466,14 @@ export async function handleCinema(request, env, path, ctx) {
       return new Response(JSON.stringify({ ...full, progress: rec.progress }), { headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
     }
     const rec = await createMovie(env, body);
-    return new Response(JSON.stringify(rec), { headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+    if (!body.start) {
+      return new Response(JSON.stringify(rec), { headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+    }
+    const movie = await getMovie(env, rec.slug);
+    movie.render = true;
+    const advanced = await advanceFilm(env, movie, ctx);
+    const full = await getMovie(env, movie.slug);
+    return new Response(JSON.stringify({ ...full, progress: advanced.progress }), { headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
   }
   return null;
 }
