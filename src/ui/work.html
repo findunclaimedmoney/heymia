@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.16">
+<html lang="en" data-heymia-ui="4.9.17">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,6 +13,10 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
 .serif { font-family:'Playfair Display',serif; }
 .glass { background:var(--panel); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.08); }
 .glass-light { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); }
+.mia-bar { height:6px; border-radius:999px; background:#f97316; position:relative; overflow:hidden; }
+.mia-bar[data-state="work"]::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent); animation:mia-slide 1.1s linear infinite; }
+.mia-bar[data-state="done"] { background:#22c55e; }
+@keyframes mia-slide { from { transform:translateX(-100%);} to { transform:translateX(100%);} }
 ::-webkit-scrollbar { width:4px; height:4px; }
 ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.15); border-radius:4px; }
 .drop-zone.dragover { border-color:#ec4899 !important; background:rgba(236,72,153,0.12) !important; }
@@ -1127,11 +1131,73 @@ function addWorkLog(steps, ms) {
   const box = document.getElementById('mia-chat');
   if (!box) return;
   const wrap = document.createElement('div');
-  wrap.className = 'mr-4 my-1 text-[11px] text-slate-400';
-  const rows = list.map(s => '<div class="flex gap-2 py-0.5 leading-snug"><span class="text-slate-500 shrink-0">' + (s.kind === 'error' ? '!' : s.kind === 'tool' ? '▸' : s.kind === 'search' ? '?' : '·') + '</span><span>' + escapeHtml(s.text) + '</span></div>').join('');
-  wrap.innerHTML = '<button type="button" class="work-toggle flex items-center gap-1 text-slate-300 font-semibold" onclick="var n=this.nextElementSibling;n.classList.toggle(\'hidden\')">Worked for ' + workDuration(ms) + '</button><div class="work-steps mt-1 pl-2 border-l border-white/10 space-y-0.5">' + rows + '</div>';
+  wrap.className = 'mr-4 my-2';
+  wrap.innerHTML = '<div class="mia-bar" data-state="done"></div><div class="text-[10px] font-bold mt-1" style="color:#4ade80">Done · ' + workDuration(ms) + '</div><div class="mt-1 text-[11px] text-slate-400 space-y-0.5">' + list.map(s => '<div>· ' + escapeHtml(s.text) + '</div>').join('') + '</div>';
   box.appendChild(wrap);
   box.scrollTop = box.scrollHeight;
+}
+function beginTaskBar() {
+  const box = document.getElementById('mia-chat');
+  if (!box) return;
+  const old = document.getElementById('mia-task');
+  if (old) old.removeAttribute('id');
+  const wrap = document.createElement('div');
+  wrap.id = 'mia-task';
+  wrap.className = 'mr-4 my-2';
+  wrap.innerHTML = '<div class="mia-bar" data-state="work"></div><div class="text-[10px] font-bold mt-1" data-label style="color:#fb923c">Working</div><div class="task-steps mt-1 text-[11px] text-slate-400 space-y-0.5"></div>';
+  box.appendChild(wrap);
+  const lines = ['Read the message.', 'Check whether this is a site, a film, or a question.', 'Ask Grok 4.5.'];
+  let i = 0;
+  const tick = () => {
+    if (!wrap.isConnected || wrap.dataset.locked) return;
+    if (i >= lines.length) return;
+    const row = document.createElement('div');
+    row.textContent = '· ' + lines[i++];
+    wrap.querySelector('.task-steps').appendChild(row);
+    box.scrollTop = box.scrollHeight;
+    wrap._timer = setTimeout(tick, 650);
+  };
+  tick();
+}
+function paintTaskBar(trace, pending) {
+  const wrap = document.getElementById('mia-task');
+  if (!wrap) return;
+  wrap.dataset.locked = '1';
+  clearTimeout(wrap._timer);
+  const steps = Array.isArray(trace) ? trace.filter(s => s && s.text) : [];
+  if (steps.length) wrap.querySelector('.task-steps').innerHTML = steps.map(s => '<div>· ' + escapeHtml(s.text) + '</div>').join('');
+  const bar = wrap.querySelector('.mia-bar');
+  const label = wrap.querySelector('[data-label]');
+  if (pending) {
+    bar.dataset.state = 'work';
+    label.textContent = 'Rendering';
+    label.style.color = '#fb923c';
+    return;
+  }
+  bar.dataset.state = 'done';
+  label.textContent = 'Done';
+  label.style.color = '#4ade80';
+  wrap.removeAttribute('id');
+}
+function settleTaskBar() {
+  const wrap = document.getElementById('mia-task');
+  if (!wrap) return;
+  const board = document.querySelector('#mia-chat .clip-status') && wrap.nextElementSibling;
+  const statuses = [...document.querySelectorAll('#mia-chat .clip-status')].map(el => el.textContent || '');
+  if (statuses.some(t => /render|queued|start/i.test(t) && !/done|failed/i.test(t))) return;
+  const failed = statuses.some(t => /failed/i.test(t));
+  const bar = wrap.querySelector('.mia-bar');
+  const label = wrap.querySelector('[data-label]');
+  if (failed && !statuses.some(t => /render/i.test(t))) {
+    label.textContent = 'Stopped';
+    return;
+  }
+  if (statuses.length && statuses.every(t => /done/i.test(t))) {
+    bar.dataset.state = 'done';
+    label.textContent = 'Done';
+    label.style.color = '#4ade80';
+    wrap.removeAttribute('id');
+  }
 }
 
 function clipPlayUrl(c) {
@@ -1162,8 +1228,8 @@ async function watchClipRow(row, id) {
     try {
       const j = await (await fetch(base + '/api/clips/jobs/' + id)).json();
       if (status) status.textContent = (j.status || '…') + (j.error ? ' — ' + j.error : '') + (j.engine ? ' · ' + j.engine : '');
-      if (j.status === 'done') { mountClipVideo(row, j); return; }
-      if (j.status === 'failed') return;
+      if (j.status === 'done') { mountClipVideo(row, j); settleTaskBar(); return; }
+      if (j.status === 'failed') { settleTaskBar(); return; }
     } catch (e) {}
   }
   if (status && !row.querySelector('video')) status.textContent += ' · still rendering. A check runs every minute and saves the file when xAI finishes. Leave this open or ask “where is it”.';
@@ -1259,7 +1325,7 @@ async function sendToMia(e) {
   if (!state.miaTurns) state.miaTurns = [];
   state.miaTurns.push({ role: 'user', content: text });
 
-  addMia('Thinking…');
+  beginTaskBar();
   const payloads = JSON.stringify({
     message: text,
     messages: (state.miaTurns || [{ role: 'user', content: text }]).slice(-16),
@@ -1284,10 +1350,11 @@ async function sendToMia(e) {
         if (!wres.ok || !ct.includes('json')) continue;
         const wdata = await wres.json();
         const box = document.getElementById('mia-chat');
-        if (box.lastChild && box.lastChild.textContent.includes('Thinking')) box.removeChild(box.lastChild);
         const reply = wdata.reply || wdata.response;
         if (!reply) continue;
-        addWorkLog(wdata.trace, wdata.worked_ms);
+        const clips = Array.isArray(wdata.clips) ? wdata.clips : [];
+        const pending = !!wdata.pending || clips.some(c => c && c.status !== 'done' && c.status !== 'failed' && c.ok !== false);
+        paintTaskBar(wdata.trace, pending);
         addMia(reply);
         if (Array.isArray(wdata.clips) && wdata.clips.length) showClipBoard(wdata.clips);
         if (!state.miaTurns) state.miaTurns = [];
@@ -1304,8 +1371,12 @@ async function sendToMia(e) {
   } catch (e) { /* try next */ }
 
   const box = document.getElementById('mia-chat');
-  if (box.lastChild && box.lastChild.textContent.includes('Thinking')) box.lastChild.remove();
-  addWorkLog([{ kind: 'error', text: 'The Worker did not return JSON. Nothing was rendered.' }], 0);
+  paintTaskBar([{ kind: 'error', text: 'The Worker did not return JSON. Nothing was rendered.' }], true);
+  const failed = document.getElementById('mia-task');
+  if (failed) {
+    const label = failed.querySelector('[data-label]');
+    if (label) label.textContent = 'Stopped';
+  }
   addMia('Grok 4.5 did not answer. I will not fall back to Gemini.');
 }
 

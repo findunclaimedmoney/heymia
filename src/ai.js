@@ -556,7 +556,9 @@ export async function handleAgentChat(env, body, helpers) {
   }
   function pack(reply, extra) {
     extra = extra || {};
-    return { reply, response: reply, agent, trace, worked_ms: Date.now() - started, ...extra };
+    const clips = extra.clips || [];
+    const pending = clips.some((c) => c && c.status !== "done" && c.status !== "failed" && c.ok !== false);
+    return { reply, response: reply, agent, trace, worked_ms: Date.now() - started, pending, ...extra };
   }
   const system = getSystemPrompt(agent === "jess" || agent === "Jess" ? "Jess" : "Mia") + (body.yearMemory || "");
   let filesNote = "";
