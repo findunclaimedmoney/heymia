@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.14">
+<html lang="en" data-heymia-ui="4.9.15">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -441,7 +441,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
           <div class="flex items-start justify-between gap-3">
             <div>
               <h2 class="text-lg font-bold serif leading-tight">Cinema · 30-minute films</h2>
-              <p class="text-[11px] text-slate-400 mt-1">Mia writes the bible. Kling / Runway / Luma make the shots. Cut stitches. YouTube pack is included. She cannot render 30 minutes of pixels on this Worker — that is the honest pipeline that actually ships films.</p>
+              <p class="text-[11px] text-slate-400 mt-1">Write the film, then render it here. Shots are real Grok Imagine clips, two at a time, until each one is a file. The player underneath plays them in order. A 30-minute film is about 100 clips, not one render.</p>
             </div>
             <button onclick="listCinemaNow()" class="shrink-0 px-3 py-2 rounded-xl glass-light text-xs font-bold">Saved films</button>
           </div>
@@ -461,7 +461,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
             <div class="glass rounded-2xl p-4 border border-white/10 space-y-2">
               <div class="text-xs font-bold">Shot engines</div>
               <div class="flex flex-wrap gap-1.5" id="cin-engines"></div>
-              <p class="text-[10px] text-slate-500">Lock prompt (paste into every generator): cinematic 2.39:1 anamorphic, 35mm grain, same face, same coat, no text, no watermark.</p>
+              <p class="text-[10px] text-slate-500">Each shot is a different action plus the same lock. Render happens on this site. Kling is only there if you want a second engine.</p>
               <div id="cin-saved" class="text-[11px] text-slate-400 space-y-1"></div>
             </div>
           </div>
@@ -846,7 +846,16 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
         <input id="eleven-key-input" type="password" placeholder="Not required. Mia already has a free voice." class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
       </div>
       <div>
-        <p class="text-[10px] text-slate-500 mt-1">Stills can fall back to FLUX when Grok has no credit. Cloudflare secret name must be exactly <span class="text-pink-300">HF_TOKEN</span>. Do not paste that token into the browser.</p>
+        <label class="text-[10px] text-slate-400 block mb-1 mt-2">YouTube client id</label>
+        <input id="yt-client-input" type="text" placeholder="….apps.googleusercontent.com" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm mb-1">
+        <input id="yt-secret-input" type="password" placeholder="YouTube client secret" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm mb-1">
+        <input id="yt-refresh-input" type="password" placeholder="YouTube refresh token" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
+        <label class="text-[10px] text-slate-400 block mb-1 mt-2">Instagram</label>
+        <input id="ig-token-input" type="password" placeholder="Meta page token" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm mb-1">
+        <input id="ig-user-input" type="text" placeholder="Instagram user id" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm mb-1">
+        <input id="meta-app-input" type="text" placeholder="Meta app id" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm mb-1">
+        <input id="meta-secret-input" type="password" placeholder="Meta app secret" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
+        <p class="text-[10px] text-slate-500 mt-1">These four log the site into YouTube and Instagram. Channel UC73le_vohvEOka1rjnOh3SQ is already the default. Saving sends them to the vault, not just this browser.</p>
         <label class="text-[10px] text-slate-400 block mb-1 mt-2">OpenAI / other <span id="rec-openai" class="text-slate-600">—</span></label>
         <input id="openai-key-input" type="password" placeholder="sk-…  sk-ant-…  gsk_…" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm">
       </div>
@@ -1143,8 +1152,8 @@ function mountClipVideo(row, job) {
 async function watchClipRow(row, id) {
   const status = row.querySelector('.clip-status');
   const base = (WORKER_BASE || location.origin).replace(/\/$/, '');
-  for (let i = 0; i < 80; i++) {
-    await new Promise((r) => setTimeout(r, 1500));
+  for (let i = 0; i < 150; i++) {
+    await new Promise((r) => setTimeout(r, 4000));
     try {
       const j = await (await fetch(base + '/api/clips/jobs/' + id)).json();
       if (status) status.textContent = (j.status || '…') + (j.error ? ' — ' + j.error : '') + (j.engine ? ' · ' + j.engine : '');
@@ -1152,7 +1161,7 @@ async function watchClipRow(row, id) {
       if (j.status === 'failed') return;
     } catch (e) {}
   }
-  if (status && !row.querySelector('video')) status.textContent += ' · still waiting. Ask Mia "where is it" to refresh.';
+  if (status && !row.querySelector('video')) status.textContent += ' · still rendering. A check runs every minute and saves the file when xAI finishes. Leave this open or ask “where is it”.';
 }
 function showClipBoard(clips) {
   const list = Array.isArray(clips) ? clips : [];
@@ -1441,6 +1450,22 @@ function saveSettings() {
     ['heymia_openai', state.openaiKey],
   ];
   store.forEach(([k, v]) => { if (v) localStorage.setItem(k, v); });
+  const connect = {
+    YOUTUBE_CLIENT_ID: (document.getElementById('yt-client-input') || {}).value || '',
+    YOUTUBE_CLIENT_SECRET: (document.getElementById('yt-secret-input') || {}).value || '',
+    YOUTUBE_REFRESH_TOKEN: (document.getElementById('yt-refresh-input') || {}).value || '',
+    META_PAGE_TOKEN: (document.getElementById('ig-token-input') || {}).value || '',
+    IG_USER_ID: (document.getElementById('ig-user-input') || {}).value || '',
+    META_APP_ID: (document.getElementById('meta-app-input') || {}).value || '',
+    META_APP_SECRET: (document.getElementById('meta-secret-input') || {}).value || '',
+  };
+  if (Object.values(connect).some((v) => String(v).trim())) {
+    fetch(WORKER_BASE.replace(/\/$/, '') + '/api/connect', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(connect)
+    }).then((r) => r.json()).then((d) => {
+      addMia(d.ok ? ('YouTube / Instagram saved on the Worker: ' + (d.saved || []).join(', ')) : ('Connect save failed: ' + (d.error || 'unknown')));
+    }).catch((e) => addMia('Connect save failed: ' + e.message));
+  }
   const recognised = [];
   if (state.geminiKey) recognised.push('Gemini ' + recogniseSecret(state.geminiKey).label);
   if (state.stripeKey) recognised.push('Stripe');
@@ -2589,7 +2614,7 @@ async function createCinemaNow() {
     if (st) st.textContent = rec.ok ? ('Saved movies/' + rec.slug + '/ · ' + (rec.scenes || []).length + ' scenes · ' + rec.runtime_min + ' min') : (rec.error || 'fail');
     paintCinema(rec);
     addMia(rec.ok
-      ? ('Movie bible ready: “' + rec.title + '”. ' + (rec.scenes || []).length + ' scenes, 108 locked shots. Generate in Kling with the lock prompt, then stitch in Cut. I did not render 30 minutes of pixels — that is the part the engines do.')
+      ? ('Film “' + rec.title + '” is saved. ' + (rec.scenes || []).length + ' scenes. Press Render the film. Shots become files two at a time and play in order.')
       : ('Cinema failed: ' + (rec.error || 'unknown')));
     listCinemaNow();
   } catch (e) {
@@ -2601,14 +2626,23 @@ async function createCinemaNow() {
 function paintCinema(m) {
   const board = document.getElementById('cin-board');
   if (!board || !m || !m.scenes) return;
+  state.cinemaSlug = m.slug;
   const yt = (m.viral && m.viral.youtube) || {};
+  const shots = [];
+  m.scenes.forEach((s) => (s.shots || []).forEach((sh) => shots.push(sh)));
+  const done = shots.filter((sh) => sh.status === 'done' && sh.key);
+  const prog = m.progress || { done: done.length, total: shots.length, rendering: shots.filter((sh) => sh.status === 'rendering').length };
   board.innerHTML =
     `<div class="glass rounded-2xl p-4 border border-white/10 space-y-2">
       <div class="text-sm font-bold">${escapeHtml(m.title)}</div>
       <div class="text-[11px] text-slate-400">${escapeHtml(m.logline || '')}</div>
-      <div class="text-[11px] text-pink-300">${escapeHtml(m.hook_3s || '')}</div>
+      <div class="text-[11px] text-pink-300">${escapeHtml(prog.done || done.length)} / ${escapeHtml(String(prog.total || shots.length))} shots are files${prog.rendering ? ' · ' + prog.rendering + ' rendering' : ''}</div>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="renderFilm('${escapeHtml(m.slug || '')}')" class="px-3 py-2 rounded-xl bg-pink-600 text-xs font-bold">Render the film</button>
+        <button onclick="renderFilm('${escapeHtml(m.slug || '')}', true)" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Stop queue</button>
+      </div>
+      <div id="cin-player" class="space-y-2"></div>
       <div class="text-[10px] text-slate-500">YouTube: ${escapeHtml(yt.title || '')}</div>
-      <pre class="text-[10px] bg-black/40 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap">${escapeHtml(m.lock || '')}</pre>
     </div>` +
     m.scenes.map((s) => {
       const start = Math.floor(s.start / 60) + ':' + String(s.start % 60).padStart(2, '0');
@@ -2617,10 +2651,47 @@ function paintCinema(m) {
         <div class="text-[11px] text-slate-400 mt-1">${escapeHtml(s.purpose || '')}</div>
         ${s.dialogue ? '<div class="text-[12px] mt-2 italic">' + escapeHtml(s.dialogue) + '</div>' : ''}
         <div class="mt-2 space-y-1">${(s.shots || []).map((sh) =>
-          '<div class="text-[10px] text-slate-400"><span class="text-pink-300 font-bold">' + escapeHtml(sh.id) + '</span> ' + escapeHtml(sh.prompt) + '</div>'
+          '<div class="text-[10px] text-slate-400"><span class="text-pink-300 font-bold">' + escapeHtml(sh.id) + '</span> ' + escapeHtml(sh.status || 'not started') + ' — ' + escapeHtml(sh.prompt) + '</div>'
         ).join('')}</div>
       </div>`;
     }).join('');
+  const player = document.getElementById('cin-player');
+  if (player && done.length) {
+    const v = document.createElement('video');
+    v.controls = true;
+    v.playsInline = true;
+    v.preload = 'metadata';
+    v.className = 'w-full rounded-xl bg-black';
+    let i = 0;
+    const playAt = (n) => {
+      const sh = done[n];
+      if (!sh) return;
+      v.src = clipPlayUrl(sh);
+      v.play().catch(() => {});
+    };
+    v.onended = () => { i += 1; if (i < done.length) playAt(i); };
+    player.appendChild(v);
+    playAt(0);
+  }
+  if (m.render) {
+    clearTimeout(state.cinemaTimer);
+    state.cinemaTimer = setTimeout(() => openCinema(m.slug), 20000);
+  }
+}
+
+async function renderFilm(slug, stop) {
+  const st = document.getElementById('cin-status');
+  if (st) st.textContent = stop ? 'Stopping the queue…' : 'Starting two shots…';
+  try {
+    const rec = await (await fetch(WORKER_BASE.replace(/\/$/, '') + '/api/cinema', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: stop ? 'render' : 'render', slug, stop: !!stop })
+    })).json();
+    if (st) st.textContent = rec.error || ((rec.progress && (rec.progress.done + ' / ' + rec.progress.total + ' files')) || 'Queue updated');
+    paintCinema(rec);
+  } catch (e) {
+    if (st) st.textContent = e.message;
+  }
 }
 
 async function listCinemaNow() {

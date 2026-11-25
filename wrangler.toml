@@ -27,3 +27,6 @@ COMMERCIAL = "1"
 [[r2_buckets]]
 binding = "VAULT"
 bucket_name = "heymia-vault"
+
+[triggers]
+crons = ["* * * * *"]

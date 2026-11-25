@@ -19,7 +19,7 @@ import { partnerHtml, PARTNER } from "./partner.js";
 import { fanHtml, makeFanClip } from "./fan.js";
 import { cut2Html } from "./cut2.js";
 
-const VERSION = "4.9.14";
+const VERSION = "4.9.15";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -362,8 +362,63 @@ function createJob(t, d) {
   return j;
 }
 
+async function liftSecrets(env) {
+  if (!env || !env.VAULT) return env;
+  try {
+    const obj = await env.VAULT.get("social/connect.json");
+    if (!obj) return env;
+    const extra = JSON.parse(await obj.text());
+    return new Proxy(env, {
+      get(target, prop) {
+        if (prop === "VAULT" || prop === "AI" || prop === "MEMORY") return target[prop];
+        const value = extra && extra[prop];
+        return value ? value : target[prop];
+      },
+    });
+  } catch {
+    return env;
+  }
+}
+
+const CONNECT_KEYS = [
+  "YOUTUBE_CLIENT_ID",
+  "YOUTUBE_CLIENT_SECRET",
+  "YOUTUBE_REFRESH_TOKEN",
+  "YOUTUBE_CHANNEL_ID",
+  "META_APP_ID",
+  "META_APP_SECRET",
+  "META_PAGE_TOKEN",
+  "IG_USER_ID",
+];
+
+async function saveConnect(env, body) {
+  let prev = {};
+  try {
+    const existing = await env.VAULT.get("social/connect.json");
+    if (existing) prev = JSON.parse(await existing.text());
+  } catch {}
+  for (const key of CONNECT_KEYS) {
+    const value = String((body && body[key]) || "").trim();
+    if (value) prev[key] = value;
+  }
+  await env.VAULT.put("social/connect.json", JSON.stringify(prev), {
+    httpMetadata: { contentType: "application/json" },
+  });
+  return { ok: true, saved: CONNECT_KEYS.filter((key) => !!prev[key]) };
+}
+
 export default {
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil((async () => {
+      env = await liftSecrets(env);
+      const { refreshJobs } = await import("./imagine.js");
+      const { advanceFilms } = await import("./cinema.js");
+      await refreshJobs(env);
+      await advanceFilms(env, ctx);
+    })());
+  },
   async fetch(request, env, ctx) {
+    env = await liftSecrets(env);
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
@@ -698,6 +753,10 @@ export default {
       if (path === "/api/clip" && method === "POST") {
         return jsonR(await convertMp4(env, await request.json().catch(() => ({}))));
       }
+      if (path === "/api/connect" && method === "POST") {
+        if (!vaultBound(env)) return jsonR({ error: "VAULT unbound" }, 503);
+        return jsonR(await saveConnect(env, await request.json().catch(() => ({}))));
+      }
       const yt = await handleYoutube(request, env, path, ctx);
       if (yt instanceof Response) return yt;
       if (yt) return jsonR(yt, yt.ok === false ? 400 : 200);
@@ -708,7 +767,7 @@ export default {
       if (imagined) return jsonR(imagined, imagined.ok === false ? 400 : 200);
       const clipLib = await handleClips(request, env, path);
       if (clipLib) return clipLib;
-      const cinema = await handleCinema(request, env, path);
+      const cinema = await handleCinema(request, env, path, ctx);
       if (cinema) return cinema;
       const edited = await handleEdit(request, env, path);
       if (edited) return edited;

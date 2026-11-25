@@ -66,8 +66,17 @@ async function pollXaiVideo(key, rid) {
   });
   const data = await res.json().catch(() => ({}));
   const status = String(data.status || data.state || "").toLowerCase();
-  const url = data.video?.url || data.url || data.video_url || data.result?.url;
-  return { status, url, raw: data };
+  const url =
+    data.video?.url ||
+    data.url ||
+    data.video_url ||
+    data.result?.url ||
+    data.output?.url ||
+    data.data?.video?.url ||
+    data.response?.url ||
+    "";
+  const done = !!url || ["done", "completed", "complete", "succeeded", "success"].includes(status);
+  return { status: done && url ? "done" : status, url, raw: data };
 }
 
 async function startVeo(key, prompt, resolution) {
@@ -429,7 +438,7 @@ export async function listJobs(env) {
 
 export async function refreshJobs(env) {
   const listed = await listJobs(env);
-  const jobs = await Promise.all((listed.jobs || []).slice(0, 8).map(async (job) => {
+  const jobs = await Promise.all((listed.jobs || []).slice(0, 16).map(async (job) => {
     if (!job.id || job.status === "done" || job.status === "failed") return job;
     const ticked = await tickJob(env, job.id);
     return {

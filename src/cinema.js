@@ -1,3 +1,5 @@
+import { generateClip, tickJob } from "./imagine.js";
+
 function slugify(s) {
   return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "film";
 }
@@ -49,22 +51,90 @@ function purposeOf(fn) {
 
 function shotFor(fn, ctx, beat) {
   const { hero, lock, genre, title } = ctx;
-  const look = {
-    cold_open: `Extreme close-up of ${hero}'s eye reflecting an impossible door. Smash to wide. ${lock}.`,
-    world: `${hero} in their real room at blue hour, one practical lamp, dust in the beam. ${lock}.`,
-    inciting: `The door appears where a wall should be. Handheld push-in, 24fps, ${genre} lighting. ${lock}.`,
-    fun_and_games: `Steadicam follow ${hero} through the other side — scale shift, impossible architecture. ${lock}.`,
-    midpoint: `Overhead crane: ${hero} realises the cost. Slow dolly. ${lock}.`,
-    bad_guys_close: `Cross-cut: the thing hunting them vs ${hero} running a corridor that loops. ${lock}.`,
-    dark_night: `Static wide, ${hero} small in frame, rain or ash, one breath. ${lock}.`,
-    climax: `The cold-open image reversed: ${hero} now on the other side of the eye/door. 48fps ramp to 24. ${lock}.`,
-    button: `The door closes. Hold 8 frames of black. ${title} mark as a light leak, not a title card. ${lock}.`,
+  const sets = {
+    cold_open: [
+      `Extreme close-up of ${hero}'s eye. An impossible door is only in the pupil.`,
+      `Smash wide. The same room. The wall is still a wall.`,
+      `${hero} blinks. For one frame a door seam appears in the wallpaper.`,
+      `Insert: a hand stops just short of that seam.`,
+      `Back to the eye. The pupil-door opens a crack of warm light.`,
+      `Eight frames of black, then ${hero}'s face, close, looking into the lens.`,
+    ],
+    world: [
+      `${hero} at a small table, blue hour, one practical lamp, dust in the beam.`,
+      `The coat on the chair. ${hero} does not put it on yet.`,
+      `Window: an ordinary street. No door anywhere.`,
+      `${hero} pours water. The glass reflects a door the room does not have.`,
+      `They stand, decide, and sit back down.`,
+      `Wide: the room holds still. ${hero} is small in it.`,
+    ],
+    inciting: [
+      `A door is in the wall where paint was. Handheld push-in.`,
+      `${hero} steps back. The door stays.`,
+      `They touch the frame. It is warm. The wall around it is cold.`,
+      `The handle turns by itself one inch, then stops.`,
+      `${hero} looks behind them. The room is the same. The door is not.`,
+      `They take the handle. Cut on the click.`,
+    ],
+    fun_and_games: [
+      `Steadicam through the doorway. The next room is a stair that should not fit.`,
+      `${hero} walks a corridor that is longer than the building.`,
+      `A window on the other side shows their own room, empty.`,
+      `They test a rule: look back. The door is farther away.`,
+      `Scale shift. ${hero} is tiny under a ceiling of doors.`,
+      `They laugh once, then stop, because the laugh echoes in a voice that is not theirs.`,
+    ],
+    midpoint: [
+      `Overhead: ${hero} sees the cost written on the floor in their own handwriting.`,
+      `Slow dolly. They pick the paper up. It is blank from this side.`,
+      `Match cut: the same paper in the real room, now with a sentence.`,
+      `${hero} understands the door kept something of them.`,
+      `They try to go back. The corridor has one more turn.`,
+      `Hold on their face. The decision is not spoken.`,
+    ],
+    bad_guys_close: [
+      `Cross-cut: something tall at the far end of the corridor, not running, arriving.`,
+      `${hero} runs. The corridor loops to the same lamp.`,
+      `The thing is the door, walking.`,
+      `Close on shoes. Theirs, then not theirs.`,
+      `A hand on their shoulder that is their own hand from the cold open.`,
+      `They stop running. The corridor goes quiet.`,
+    ],
+    dark_night: [
+      `Static wide. ${hero} small, rain or ash, one breath.`,
+      `They take the coat off. The signature detail stays.`,
+      `No music. A clock that is not in the room ticks once.`,
+      `They almost say the line and do not.`,
+      `The door, far, waits with its light off.`,
+      `One tear or none. Do not decorate it.`,
+    ],
+    climax: [
+      `The cold-open eye, reversed: we are inside the pupil looking out at ${hero}.`,
+      `They step through toward us.`,
+      `48fps to 24 as their foot lands in the real room.`,
+      `The door behind them is paint again.`,
+      `The paper in the real room now has their name and not the word for what hunted them.`,
+      `They look at us the way the eye looked at them.`,
+    ],
+    button: [
+      `The wall is a wall. Hold.`,
+      `A seam of light at the skirting board, one inch, then gone.`,
+      `Black. Eight frames.`,
+      `${title} as a light leak, not a title card.`,
+      `The lamp is still on in the empty room.`,
+      `Cut to black and stay there.`,
+    ],
   };
+  const list = sets[fn] || sets.world;
+  const action = list[beat % list.length];
+  const camera = beat % 2 ? "24mm anamorphic push" : "85mm close, shallow focus";
+  const motion = ["slow dolly in", "handheld breathe", "locked-off"][beat % 3];
+  const light = genre + " lighting, practical lamps only";
   return {
-    camera: beat % 2 ? "24mm anamorphic push" : "85mm close, shallow",
-    motion: beat % 3 === 0 ? "slow dolly in" : beat % 3 === 1 ? "handheld breathe" : "locked-off",
-    prompt: look[fn],
-    interrupt: beat % 2 === 0 ? "hard cut on a sound design sting" : "match-cut on eye-line",
+    camera,
+    motion,
+    interrupt: beat % 2 === 0 ? "hard cut on a sting" : "match-cut on the eye-line",
+    prompt: `${action} Camera: ${camera}, ${motion}. ${light}. ${lock}. No text, no watermark, no logo.`,
   };
 }
 
@@ -107,7 +177,7 @@ export function planMovie(input = {}) {
         camera: s.camera,
         motion: s.motion,
         interrupt: s.interrupt,
-        prompt: s.prompt + ` Shot ${k + 1}/6 of scene ${i + 1}. Keep ${hero} wardrobe identical.`,
+        prompt: s.prompt,
       };
     });
     scenes.push({
@@ -177,7 +247,7 @@ export function planMovie(input = {}) {
     },
     engines: ENGINES,
     stitch: {
-      note: "Generate each shot 5–10s in Kling/Runway/Luma with the lock prompt. Drop files as scene-01.mp4 … in the Cut bench and concat.",
+      note: "Shots render on Grok Imagine, two at a time, until each one is an mp4. The film plays in order on this page.",
       ffmpeg: scenes.map((s) => `file '${s.id}.mp4'`).join("\n"),
       command: "ffmpeg -f concat -safe 0 -i list.txt -c:v libx264 -c:a aac -movflags +faststart movie.mp4",
     },
@@ -259,7 +329,62 @@ export async function getMovie(env, slug) {
   return JSON.parse(await obj.text());
 }
 
-export async function handleCinema(request, env, path) {
+function flatShots(movie) {
+  const shots = [];
+  for (const scene of movie.scenes || []) {
+    for (const shot of scene.shots || []) shots.push(shot);
+  }
+  return shots;
+}
+
+export async function advanceFilm(env, movie, ctx) {
+  if (!movie || !movie.scenes) return { ok: false, error: "no film" };
+  const shots = flatShots(movie);
+  for (const shot of shots) {
+    if (!shot.job_id || shot.status === "done" || shot.status === "failed") continue;
+    const job = await tickJob(env, shot.job_id);
+    shot.status = job.status || shot.status;
+    shot.key = job.key || shot.key || "";
+    shot.download = job.download || shot.download || "";
+    shot.error = job.error || "";
+  }
+  const active = shots.filter((s) => s.status === "rendering" || s.status === "queued").length;
+  let started = 0;
+  if (movie.render) {
+    for (const shot of shots) {
+      if (active + started >= 2) break;
+      if (shot.job_id) continue;
+      const rec = await generateClip(env, {
+        title: (movie.slug || "film") + " " + shot.id,
+        story: shot.prompt,
+        duration: Math.min(15, Math.max(5, Number(shot.dur) || 10)),
+        look: "",
+      }, ctx);
+      shot.job_id = rec.job_id || "";
+      shot.status = rec.ok ? "rendering" : "failed";
+      shot.error = rec.error || "";
+      if (rec.ok) started++;
+      else break;
+    }
+  }
+  const done = shots.filter((s) => s.status === "done" && s.key).length;
+  movie.progress = { done, total: shots.length, rendering: shots.filter((s) => s.status === "rendering").length, started };
+  await saveMovie(env, movie);
+  return { ok: true, slug: movie.slug, title: movie.title, progress: movie.progress, render: !!movie.render };
+}
+
+export async function advanceFilms(env, ctx) {
+  const listed = await listMovies(env);
+  const films = [];
+  for (const row of listed.movies || []) {
+    const movie = await getMovie(env, row.slug);
+    if (!movie || movie.error || !movie.render) continue;
+    films.push(await advanceFilm(env, movie, ctx));
+  }
+  return { ok: true, films };
+}
+
+export async function handleCinema(request, env, path, ctx) {
   const url = new URL(request.url);
   if (path !== "/api/cinema") return null;
   if (request.method === "GET") {
@@ -269,6 +394,16 @@ export async function handleCinema(request, env, path) {
   }
   if (request.method === "POST") {
     const body = await request.json().catch(() => ({}));
+    if (body.action === "render" || body.action === "advance") {
+      const movie = await getMovie(env, body.slug || "");
+      if (!movie || movie.error) {
+        return new Response(JSON.stringify(movie || { error: "not found" }), { status: 404, headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+      }
+      if (body.action === "render") movie.render = body.stop ? false : true;
+      const rec = await advanceFilm(env, movie, ctx);
+      const full = await getMovie(env, movie.slug);
+      return new Response(JSON.stringify({ ...full, progress: rec.progress }), { headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+    }
     const rec = await createMovie(env, body);
     return new Response(JSON.stringify(rec), { headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
   }
