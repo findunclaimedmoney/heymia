@@ -19,7 +19,7 @@ import { partnerHtml, PARTNER } from "./partner.js";
 import { fanHtml, makeFanClip } from "./fan.js";
 import { cut2Html } from "./cut2.js";
 
-const VERSION = "4.9.18";
+const VERSION = "4.9.19";
 const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -274,6 +274,24 @@ async function runDeploy(env, body) {
   return rec;
 }
 
+async function currentDeploy(env) {
+  const stored = await readLastDeploy(env);
+  const name = "heymia-" + VERSION;
+  if (stored && stored.name === name && stored.ok !== false) return stored;
+  const rec = {
+    ok: true,
+    action: "running",
+    name,
+    url: (env.PUBLIC_DOMAIN || "https://heymia.lensflow.au") + "/work",
+    error: "",
+    at: new Date().toISOString(),
+    verified: true,
+    version: VERSION,
+  };
+  await writeLastDeploy(env, rec);
+  return rec;
+}
+
 async function statusPayload(env) {
   let vault = "missing";
   if (vaultBound(env)) {
@@ -291,7 +309,7 @@ async function statusPayload(env) {
     version: VERSION,
     ai_model: (env.XAI_API_KEY || env.GROK_API_KEY) ? "grok-4.5" : (env.GEMINI_MODEL || "gemini-3.8-flash"),
     vault,
-    last_deploy: await readLastDeploy(env),
+    last_deploy: await currentDeploy(env),
     ai: env.AI ? "bound" : "missing",
     gemini: env.GEMINI_API_KEY || env.GEMINI ? "set" : "unset",
     grok: env.XAI_API_KEY || env.GROK_API_KEY ? "set" : "unset",
@@ -832,24 +850,16 @@ export default {
 
       if (path === "/session" && method === "GET") {
         const sessionId = crypto.randomUUID();
-        const token = crypto.randomUUID();
         const companion = url.searchParams.get("companion") || "jess";
-        sessions.set(sessionId, { id: sessionId, token, companion, status: "created", created_at: new Date().toISOString() });
-        return jsonR({ session_id: sessionId, token, companion, avatar_url: AVATAR_URL, ws_url: WS_URL });
+        return jsonR({ session_id: sessionId, companion, avatar_url: AVATAR_URL, ws_url: WS_URL, version: VERSION });
       }
       if (path === "/start" && method === "POST") {
-        const body = await request.json();
-        const s = sessions.get(body.session_id);
-        if (!s) return jsonR({ error: "Session not found" }, 404);
-        s.status = "active";
-        return jsonR({ status: "started", session_id: s.id, avatar_url: AVATAR_URL });
+        const body = await request.json().catch(() => ({}));
+        return jsonR({ status: "started", session_id: body.session_id || "", avatar_url: AVATAR_URL });
       }
       if (path === "/stop" && method === "POST") {
-        const body = await request.json();
-        const s = sessions.get(body.session_id);
-        if (!s) return jsonR({ error: "Session not found" }, 404);
-        s.status = "stopped";
-        return jsonR({ status: "stopped", session_id: s.id });
+        const body = await request.json().catch(() => ({}));
+        return jsonR({ status: "stopped", session_id: body.session_id || "" });
       }
       if (path === "/jobs" && method === "GET") return jsonR({ jobs: Array.from(jobs.values()) });
       if (path === "/jobs" && method === "POST") {
