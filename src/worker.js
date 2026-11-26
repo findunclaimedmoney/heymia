@@ -19,10 +19,41 @@ import { partnerHtml, PARTNER } from "./partner.js";
 import { fanHtml, makeFanClip } from "./fan.js";
 import { cut2Html } from "./cut2.js";
 
-const VERSION = "4.9.22";
-const AVATAR_ID = "3559b3f9-29e3-48eb-a4ff-7a7dc5b47ca9";
+const VERSION = "4.9.23";
+const AVATAR_ID = "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
+
+async function freeAvatar(env) {
+  const key = env.LIVEAVATAR_API_KEY || env.LIVEAVATAR || "";
+  if (!key) return { error: "LIVEAVATAR_API_KEY is not set" };
+  const tokenRes = await fetch("https://api.liveavatar.com/v1/sessions/token", {
+    method: "POST",
+    headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+    body: JSON.stringify({ mode: "LITE", is_sandbox: true, avatar_id: AVATAR_ID }),
+  });
+  const tokenData = await tokenRes.json().catch(() => ({}));
+  const sessionToken = tokenData.session_token || (tokenData.data && tokenData.data.session_token) || "";
+  if (!tokenRes.ok || !sessionToken) {
+    const msg = tokenData.message || tokenData.error || ("LiveAvatar token HTTP " + tokenRes.status);
+    return { error: typeof msg === "string" ? msg : JSON.stringify(msg).slice(0, 280) };
+  }
+  const startRes = await fetch("https://api.liveavatar.com/v1/sessions/start", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + sessionToken },
+  });
+  const startData = await startRes.json().catch(() => ({}));
+  const room = startData.data || startData;
+  if (!startRes.ok || !room.livekit_url || !room.livekit_client_token) {
+    const msg = startData.message || startData.error || ("LiveAvatar start HTTP " + startRes.status);
+    return { error: typeof msg === "string" ? msg : JSON.stringify(msg).slice(0, 280) };
+  }
+  return {
+    url: "https://meet.livekit.io/custom?liveKitUrl=" + encodeURIComponent(room.livekit_url) + "&token=" + encodeURIComponent(room.livekit_client_token),
+    name: "Wayne",
+    note: "Free sandbox. About 1 minute. Not a custom face.",
+  };
+}
 
 const corsH = {
   "Access-Control-Allow-Origin": "*",
@@ -851,7 +882,9 @@ export default {
       if (path === "/session" && method === "GET") {
         const sessionId = crypto.randomUUID();
         const companion = url.searchParams.get("companion") || "jess";
-        return jsonR({ session_id: sessionId, companion, avatar_url: AVATAR_URL, ws_url: WS_URL, version: VERSION });
+        const face = await freeAvatar(env);
+        if (face.error) return jsonR({ error: face.error, session_id: sessionId, companion }, 502);
+        return jsonR({ session_id: sessionId, companion, avatar_url: face.url, name: face.name, note: face.note, version: VERSION });
       }
       if (path === "/start" && method === "POST") {
         const body = await request.json().catch(() => ({}));

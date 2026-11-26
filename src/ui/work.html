@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.22">
+<html lang="en" data-heymia-ui="4.9.23">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -3433,8 +3433,8 @@ async function startLiveSession(companion) {
   try {
     const base = WORKER_BASE.replace(/\/$/, '');
     const res = await fetch(base + '/session?companion=' + encodeURIComponent(companion));
-    if (!res.ok) throw new Error('session failed');
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.avatar_url) throw new Error(data.error || 'session failed');
     state.liveSessionId = data.session_id;
 
     await fetch(base + '/start', {
@@ -3445,17 +3445,15 @@ async function startLiveSession(companion) {
 
     const iframe = document.getElementById('avatar-iframe');
     const container = document.getElementById('avatar-container');
-    const embed =
-      data.avatar_url ||
-      (await (await fetch(base + '/config?companion=' + encodeURIComponent(companion))).json()).avatar_url;
-    iframe.src = embed;
+    if (!data.avatar_url) throw new Error(data.error || 'LiveAvatar did not return a face');
+    iframe.src = data.avatar_url;
     iframe.classList.remove('hidden');
     container.classList.add('hidden');
-    status.textContent = 'Live · ' + companion + ' · ' + data.session_id.slice(0, 8);
-    addMia('LiveAvatar (' + companion + ') started. Session ' + data.session_id.slice(0, 8));
+    status.textContent = (data.note || 'Live') + ' · ' + (data.name || companion);
+    addMia('LiveAvatar ' + (data.name || companion) + '. ' + (data.note || ''));
   } catch (err) {
-    status.textContent = 'Worker unreachable — using local preview';
-    addMia('Could not reach LiveAvatar Worker. Check WORKER_BASE and AVATAR_EMBED_URL_JESS.');
+    status.textContent = err.message || 'LiveAvatar failed';
+    addMia('LiveAvatar: ' + (err.message || 'failed'));
   }
 }
 
