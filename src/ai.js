@@ -464,6 +464,7 @@ export async function grokAssistant(env, { messages, system, helpers, context, s
   }
   if (msgs.length < 2) msgs.push({ role: "user", content: "Hello" });
   let lastSite = null;
+  const thoughts = [];
   for (let round = 0; round < 4; round++) {
     const res = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
@@ -485,6 +486,11 @@ export async function grokAssistant(env, { messages, system, helpers, context, s
       return { ok: false, error: msg };
     }
     const msg = data.choices?.[0]?.message || {};
+    const think = String(msg.reasoning_content || msg.reasoning || "").trim();
+    if (think) {
+      thoughts.push(think);
+      note("think", "Thinking");
+    }
     const calls = msg.tool_calls || [];
     if (!calls.length) {
       const text = String(msg.content || "").trim();
@@ -493,7 +499,7 @@ export async function grokAssistant(env, { messages, system, helpers, context, s
         return { ok: false, error: "Grok returned empty" };
       }
       note("note", "Grok 4.5 answered");
-      return { ok: true, text, model: "grok-4.5", site: lastSite };
+      return { ok: true, text, model: "grok-4.5", site: lastSite, thoughts: thoughts.join("\n\n").slice(0, 8000) };
     }
     note("note", "Grok 4.5 asked for " + calls.length + " tool" + (calls.length === 1 ? "" : "s"));
     msgs.push({ role: "assistant", content: msg.content || "", tool_calls: calls });
@@ -662,7 +668,7 @@ export async function handleAgentChat(env, body, helpers) {
     step,
     context: filesNote + (body.context ? "\n" + body.context : ""),
   });
-  if (grok.ok) return pack(grok.text, { model: grok.model || "grok-4.5", grok: true, site: grok.site });
+  if (grok.ok) return pack(grok.text, { model: grok.model || "grok-4.5", grok: true, site: grok.site, thoughts: grok.thoughts || "" });
   lastErr = grok.error;
 
   const grokKey = env.XAI_API_KEY || env.GROK_API_KEY;

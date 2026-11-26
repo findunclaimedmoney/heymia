@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.23">
+<html lang="en" data-heymia-ui="4.9.24">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1255,6 +1255,19 @@ function showClipBoard(clips) {
   box.scrollTop = box.scrollHeight;
 }
 
+function addThoughts(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return;
+  const box = document.getElementById('mia-chat');
+  if (!box) return;
+  const div = document.createElement('div');
+  div.className = 'mr-4 my-2 rounded-2xl p-3 fade-in';
+  div.style.cssText = 'background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);white-space:pre-wrap';
+  div.innerHTML = '<div class="font-bold text-[10px] mb-1 text-slate-500">Thinking</div><div class="text-[12px] leading-relaxed text-slate-300">' + escapeHtml(raw) + '</div>';
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
 function addMia(text, role = 'mia') {
   try {
     const _t = String(arguments[0] || '');
@@ -1380,6 +1393,7 @@ async function sendToMia(e) {
         const clips = Array.isArray(wdata.clips) ? wdata.clips : [];
         const pending = !!wdata.pending || clips.some(c => c && c.status !== 'done' && c.status !== 'failed' && c.ok !== false);
         paintTaskBar(wdata.trace, pending);
+        if (wdata.thoughts) addThoughts(wdata.thoughts);
         addMia(reply);
         if (Array.isArray(wdata.clips) && wdata.clips.length) showClipBoard(wdata.clips);
         if (!state.miaTurns) state.miaTurns = [];
