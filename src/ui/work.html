@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.25">
+<html lang="en" data-heymia-ui="4.9.26">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -33,6 +33,26 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:#
 #vault-preview { z-index: 15; background: var(--panel); }
 #tool-projects { padding-right: 1.25rem; }
 [id^="tool-"].hidden { display: none !important; }
+/* Primer-style chrome. Layout and controls stay. Colour and type change. */
+:root { --bg:#0d1117; --panel:#161b22; --accent:#1f6feb; --line:#30363d; --fg:#e6edf3; --muted:#8b949e; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; background:var(--bg); color:var(--fg); }
+.serif { font-family:inherit; font-weight:600; letter-spacing:-0.02em; }
+.glass { background:var(--panel); backdrop-filter:none; -webkit-backdrop-filter:none; border-color:var(--line); box-shadow:none; }
+.glass-light { background:#21262d; border-color:var(--line); }
+.tab-active { background:#21262d !important; background-image:none !important; color:var(--fg) !important; box-shadow:inset 0 -2px 0 #1f6feb; }
+.msg-user { background:#132033; border:1px solid #1f6feb55; }
+.msg-mia { background:#0d1117; border:1px solid var(--line); }
+.text-pink-300,.text-pink-400,.text-pink-500 { color:#58a6ff !important; }
+.bg-gradient-to-tr { background-image:none !important; background-color:#1f6feb !important; box-shadow:none !important; }
+.rounded-2xl,.rounded-xl { border-radius:6px !important; }
+.drop-zone { border-color:var(--line) !important; }
+.drop-zone:hover { border-color:#1f6feb !important; background:rgba(31,111,235,0.06) !important; }
+.resize-handle { background:var(--line); }
+.resize-handle:hover,.resize-handle.dragging { background:#1f6feb; }
+.preview-empty { background:#0d1117; }
+header .text-pink-400 { color:var(--muted) !important; letter-spacing:0.08em; }
+.bg-gradient-to-r, .bg-pink-600, .bg-pink-600\/80, .bg-pink-500 { background-image:none !important; background-color:#238636 !important; }
+.bg-gradient-to-tr { background-image:none !important; background-color:#1f6feb !important; box-shadow:none !important; }
 </style>
 </head>
 <body class="flex flex-col h-screen">
