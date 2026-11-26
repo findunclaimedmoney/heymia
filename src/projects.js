@@ -2,14 +2,14 @@ export const PRODUCTS = [
   {
     slug: "sovereignquant",
     name: "Sovereign Quant",
-    urls: [],
+    urls: ["https://www.sovereignquant.com.au"],
     blurb: "Multi-agent quant system",
     aliases: ["sovereign-quant", "sovereignquant", "agent-core", "quant"],
   },
   {
     slug: "lensflow",
     name: "LensFlow Dating",
-    urls: ["https://lensflow.com.au"],
+    urls: ["https://www.lensflow.com.au"],
     blurb: "Dating site · companions · Play",
     aliases: ["lensflow", "liveavatar", "heymia-play", "jess", "fanstudio"],
   },
