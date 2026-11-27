@@ -1,4 +1,5 @@
 import workHtml from "./ui/work.html.js";
+import { githubList, githubRead, githubWrite, githubReady } from "./github.js";
 import { handleAgentChat, routeFile, grokTroubleshoot } from "./ai.js";
 import { handleUiAdmin, matchHtmlPage, serveUI, unwrapHtml } from "./routing.js";
 import { listSites, mimeOf, publishSite, servePublishedSite, vaultBound, designSiteHtml } from "./sites.js";
@@ -19,7 +20,7 @@ import { partnerHtml, PARTNER } from "./partner.js";
 import { fanHtml, makeFanClip } from "./fan.js";
 import { cut2Html } from "./cut2.js";
 
-const VERSION = "4.9.26";
+const VERSION = "4.9.27";
 const AVATAR_ID = "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";
 const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
 const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
@@ -358,6 +359,8 @@ async function statusPayload(env) {
       instagram: igConfigured(env),
       youtube: !!(env.YOUTUBE_REFRESH_TOKEN || env.YOUTUBE_CLIENT_ID),
       youtube_channel: env.YOUTUBE_CHANNEL_ID || YT_CHANNEL,
+      github: githubReady(env),
+      github_write: "findunclaimedmoney/heymia",
     },
   };
 }
@@ -573,6 +576,9 @@ export default {
               const text = await found.obj.text();
               return { ok: true, key: found.key, bytes: text.length, content: text.slice(0, 8000) };
             }
+            if (name === "github_list") return githubList(env, args);
+            if (name === "github_read") return githubRead(env, args);
+            if (name === "github_write") return githubWrite(env, args);
             if (name === "save_memory") {
               await saveMem(env, "Mia", args.category || "training", args.key, String(args.value || "").slice(0, 2000));
               try { await saveFact(env, "Mia", args.key, args.value, args.category || "training"); } catch {}

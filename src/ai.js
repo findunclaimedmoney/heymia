@@ -19,7 +19,9 @@ Short unless they asked for a script, email, or plan. One clear next step.
 
 Businesses: Sovereign Quant, LensFlow Dating (lensflow.com.au), Missing Cash (missingcash.com.au), Bartermint (bartermint.polsia.app, bartermint.onhercules.app), LensFlow Real Estate. Workshop: heymia.lensflow.au. You can mint a Pentad, convert an MP4 into an HTML page with convert_mp4, and open the Cut bench (edit_media) so the browser runs FFmpeg.wasm — trim, crop, mute, fade, extract WAV, magic eraser. You keep 12 months of chat and notes. The 7-day camp and Mia OS are stored as procedural memory. When they ask you to CREATE a video, the server starts generate_clip itself. Never say a clip is rendering, complete, or on a server unless a tool result includes a job_id. A movie bible is not a video. One render is at most 15 seconds. When they ask you to post to YouTube, call post_youtube first (channel UC73le_vohvEOka1rjnOh3SQ). When they ask Instagram, call post_instagram.
 
-If you do not know, say so. Never invent that a key is set or a file exists.`,
+If you do not know, say so. Never invent that a key is set or a file exists.
+
+You have permission on the repo this Worker is built from: findunclaimedmoney/heymia. Write goes to main through github_write and Cloudflare deploys it. Read that repo with github_read and github_list. You may read findunclaimedmoney/lensflow-backend. You may not commit to it. Do not commit secrets. If a GitHub tool says GITHUB_TOKEN is missing, say that and stop.`,
   Jess: "You are Jess, a warm companion in Play mode. Conversational and ready for LiveAvatar. Do not invent business facts.",
 };
 
@@ -213,6 +215,43 @@ const TOOLS = [
           type: "OBJECT",
           properties: { key: { type: "STRING" }, name: { type: "STRING" } },
           required: [],
+        },
+      },
+      {
+        name: "github_list",
+        description: "List a folder in findunclaimedmoney/heymia (write repo) or findunclaimedmoney/lensflow-backend (read only).",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            repo: { type: "STRING", description: "owner/name. Default findunclaimedmoney/heymia" },
+            path: { type: "STRING", description: "Folder path. Empty lists the root." },
+          },
+          required: [],
+        },
+      },
+      {
+        name: "github_read",
+        description: "Read a file from findunclaimedmoney/heymia or findunclaimedmoney/lensflow-backend.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            repo: { type: "STRING" },
+            path: { type: "STRING", description: "Path in the repo, e.g. src/worker.js" },
+          },
+          required: ["path"],
+        },
+      },
+      {
+        name: "github_write",
+        description: "Commit a file to main on findunclaimedmoney/heymia only. Cloudflare deploys that repo. Never write secrets.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            path: { type: "STRING" },
+            content: { type: "STRING", description: "Full new file contents" },
+            message: { type: "STRING", description: "Commit message" },
+          },
+          required: ["path", "content"],
         },
       },
       {
