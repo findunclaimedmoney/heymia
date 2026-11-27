@@ -49,6 +49,7 @@ async function startXaiVideo(key, prompt, duration, resolution) {
       duration: Math.min(15, Math.max(5, Number(duration) || 12)),
       resolution: resolution === "1080p" || resolution === "720p" || resolution === "480p" ? resolution : "1080p",
       aspect_ratio: "16:9",
+      storage_options: { filename: "heymia-clip.mp4", public_url: true },
     }),
   });
   const data = await res.json().catch(() => ({}));
@@ -65,18 +66,22 @@ async function pollXaiVideo(key, rid) {
     headers: { Authorization: "Bearer " + key },
   });
   const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data.error?.message || data.error || ("xAI video poll HTTP " + res.status);
+    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+  }
   const status = String(data.status || data.state || "").toLowerCase();
   const url =
     data.video?.url ||
+    data.video?.file_output?.url ||
     data.url ||
     data.video_url ||
     data.result?.url ||
     data.output?.url ||
-    data.data?.video?.url ||
-    data.response?.url ||
     "";
-  const done = !!url || ["done", "completed", "complete", "succeeded", "success"].includes(status);
-  return { status: done && url ? "done" : status, url, raw: data };
+  if (status === "failed" || status === "expired") return { status, url: "", error: data.error || status };
+  if (url) return { status: "done", url };
+  return { status: status || "pending", url: "" };
 }
 
 async function startVeo(key, prompt, resolution) {

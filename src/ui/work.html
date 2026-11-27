@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.27">
+<html lang="en" data-heymia-ui="4.9.28">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -5003,10 +5003,12 @@ function updateBuildBadge(st) {
   }
 }
 async function refreshBuildBadge() {
-  if (!WORKER_BASE) return;
   try {
-    const st = await (await fetch(WORKER_BASE.replace(/\/$/, '') + '/ui/status')).json();
-    updateBuildBadge(st);
+    const st = await (await fetch(location.origin + '/health')).json();
+    const el = document.getElementById('build-badge');
+    if (!el || !st) return;
+    const d = new Date(st.last_deploy && st.last_deploy.at);
+    el.textContent = (st.version || 'HeyMia') + (isNaN(d.getTime()) ? '' : ' · ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
   } catch (e) {}
 }
 function openPublish() {
