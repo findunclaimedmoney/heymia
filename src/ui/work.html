@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.28">
+<html lang="en" data-heymia-ui="4.9.29">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1249,7 +1249,14 @@ async function watchClipRow(row, id) {
     try {
       const j = await (await fetch(base + '/api/clips/jobs/' + id)).json();
       if (status) status.textContent = (j.status || '…') + (j.error ? ' — ' + j.error : '') + (j.engine ? ' · ' + j.engine : '');
-      if (j.status === 'done') { mountClipVideo(row, j); settleTaskBar(); return; }
+      if (j.status === 'done') {
+        mountClipVideo(row, j);
+        row.dataset.done = '1';
+        row.dataset.src = clipPlayUrl(j);
+        settleTaskBar();
+        maybeJoinBoard(row);
+        return;
+      }
       if (j.status === 'failed') { settleTaskBar(); return; }
     } catch (e) {}
   }
@@ -1262,14 +1269,19 @@ function showClipBoard(clips) {
   if (!box) return;
   const wrap = document.createElement('div');
   wrap.className = 'mr-4 mb-2 space-y-2';
-  list.forEach((c) => {
+  list.forEach((c, i) => {
     const row = document.createElement('div');
     row.className = 'rounded-xl border border-white/10 bg-white/5 p-2 text-[11px]';
     const id = c.job_id || c.id || '';
+    row.dataset.clip = id || ('part-' + i);
     row.innerHTML = '<div class="font-semibold text-slate-200">' + escapeHtml(c.title || id || 'part') + '</div><div class="clip-status text-slate-400">' + escapeHtml((c.status || c.error || 'started') + (id ? ' · ' + id : '')) + '</div>';
     wrap.appendChild(row);
-    if (c.key || c.download) mountClipVideo(row, c);
-    else if (id && c.status !== 'failed' && c.ok !== false) watchClipRow(row, id);
+    if (c.key || c.download) {
+      mountClipVideo(row, c);
+      row.dataset.done = '1';
+      row.dataset.src = clipPlayUrl(c);
+      maybeJoinBoard(row);
+    } else if (id && c.status !== 'failed' && c.ok !== false) watchClipRow(row, id);
   });
   box.appendChild(wrap);
   box.scrollTop = box.scrollHeight;
@@ -2721,6 +2733,77 @@ const CINEMA_ENGINES = [
   { name:'Suno', url:'https://suno.com', use:'score' },
 ];
 
+async function stitchMp4(parts) {
+  const ffmpeg = await loadJoinFFmpeg();
+  let list = '';
+  for (let i = 0; i < parts.length; i++) {
+    const name = 'p' + i + '.mp4';
+    await ffmpeg.writeFile(name, parts[i]);
+    list += "file '" + name + "'\n";
+  }
+  await ffmpeg.writeFile('list.txt', new TextEncoder().encode(list));
+  try {
+    await ffmpeg.exec(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', 'movie.mp4']);
+  } catch (e) {
+    await ffmpeg.exec(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', 'movie.mp4']);
+  }
+  const data = await ffmpeg.readFile('movie.mp4');
+  return new Blob([data], { type: 'video/mp4' });
+}
+
+async function saveFilmBlob(blob, filename) {
+  const base = (WORKER_BASE || location.origin).replace(/\/$/, '');
+  const res = await fetch(base + '/files', {
+    method: 'POST',
+    headers: { 'Content-Type': 'video/mp4', 'X-File-Name': filename, 'X-Category': 'clips' },
+    body: blob,
+  });
+  return res.json().catch(() => ({}));
+}
+
+function mountFilm(blob, filename, saved) {
+  const box = document.getElementById('mia-chat');
+  if (!box) return;
+  const row = document.createElement('div');
+  row.className = 'mr-4 mb-2 rounded-xl border border-white/10 bg-white/5 p-2';
+  const v = document.createElement('video');
+  v.controls = true;
+  v.playsInline = true;
+  v.className = 'w-full rounded-lg bg-black';
+  v.src = URL.createObjectURL(blob);
+  row.appendChild(v);
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+  const url = saved && saved.key ? ((WORKER_BASE || location.origin).replace(/\/$/, '') + '/files?key=' + encodeURIComponent(saved.key) + '&download=1') : '';
+  addMia('One MP4 is saved: ' + filename + (url ? '\n' + url : '') + '. Download started.');
+}
+
+async function joinParts(parts, filename) {
+  const blob = await stitchMp4(parts);
+  downloadLocal(filename, blob);
+  const saved = await saveFilmBlob(blob, filename);
+  mountFilm(blob, filename, saved);
+  return saved;
+}
+
+async function maybeJoinBoard(row) {
+  const wrap = row && row.parentElement;
+  if (!wrap || wrap.dataset.joining || wrap.dataset.joined) return;
+  const rows = [...wrap.querySelectorAll('[data-clip]')];
+  if (rows.length < 2 || rows.some((r) => r.dataset.done !== '1' || !r.dataset.src)) return;
+  wrap.dataset.joining = '1';
+  addMia('All ' + rows.length + ' shots are files. Joining them into one MP4.');
+  try {
+    const parts = [];
+    for (const r of rows) parts.push(new Uint8Array(await (await fetch(r.dataset.src)).arrayBuffer()));
+    await joinParts(parts, 'heymia-film-' + rows.length + 'x15s.mp4');
+    wrap.dataset.joined = '1';
+  } catch (e) {
+    addMia('Join failed: ' + (e.message || e));
+  }
+  delete wrap.dataset.joining;
+}
+
 async function loadJoinFFmpeg() {
   if (window.__miaFfmpeg) return window.__miaFfmpeg;
   const loadScript = (src) => new Promise((resolve, reject) => {
@@ -2761,29 +2844,13 @@ async function joinCinemaFilm() {
     if (st) st.textContent = 'Need at least two finished shots. xAI still stops at 15 seconds a shot. Join sticks those shots into one file.';
     return;
   }
-  if (st) st.textContent = 'Joining ' + done.length + ' shots into one file…';
+  if (st) st.textContent = 'Joining ' + done.length + ' shots into one MP4…';
   try {
-    const ffmpeg = await loadJoinFFmpeg();
-    let list = '';
-    for (let i = 0; i < done.length; i++) {
-      const name = 'p' + i + '.mp4';
-      const buf = new Uint8Array(await (await fetch(clipPlayUrl(done[i]))).arrayBuffer());
-      await ffmpeg.writeFile(name, buf);
-      list += "file '" + name + "'\n";
-    }
-    await ffmpeg.writeFile('list.txt', new TextEncoder().encode(list));
-    try {
-      await ffmpeg.exec(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', 'movie.mp4']);
-    } catch (e) {
-      await ffmpeg.exec(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c:v', 'libx264', '-c:a', 'aac', 'movie.mp4']);
-    }
-    const data = await ffmpeg.readFile('movie.mp4');
-    const blob = new Blob([data.buffer], { type: 'video/mp4' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = (m.slug || 'heymia') + '.mp4';
-    a.click();
-    if (st) st.textContent = 'Downloaded one file from ' + done.length + ' shots. Each shot is still 15 seconds. xAI will not render 90 seconds in one call.';
+    const parts = [];
+    for (const sh of done) parts.push(new Uint8Array(await (await fetch(clipPlayUrl(sh))).arrayBuffer()));
+    const name = (m.slug || 'heymia') + '.mp4';
+    await joinParts(parts, name);
+    if (st) st.textContent = 'One MP4 from ' + done.length + ' shots. About ' + (done.length * 15) + ' seconds. Saved in clips and downloaded.';
   } catch (e) {
     if (st) st.textContent = 'Join failed: ' + (e.message || e);
   }
@@ -2908,7 +2975,7 @@ function paintCinema(m) {
       <div class="flex flex-wrap gap-2">
         <button onclick="renderFilm('${escapeHtml(m.slug || '')}')" class="px-3 py-2 rounded-xl bg-pink-600 text-xs font-bold">Render the film</button>
         <button onclick="retryFilm('${escapeHtml(m.slug || '')}')" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Retry failed</button>
-        <button onclick="joinCinemaFilm()" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Join into one file</button>
+        <button onclick="joinCinemaFilm()" class="px-3 py-2 rounded-xl bg-pink-600 text-xs font-bold">Make one MP4</button>
         <button onclick="downloadBlenderScript()" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Blender script</button>
         <button onclick="renderFilm('${escapeHtml(m.slug || '')}', true)" class="px-3 py-2 rounded-xl glass-light text-xs font-bold">Stop queue</button>
       </div>
