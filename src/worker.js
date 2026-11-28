@@ -20,18 +20,25 @@ import { partnerHtml, PARTNER } from "./partner.js";
 import { fanHtml, makeFanClip } from "./fan.js";
 import { cut2Html } from "./cut2.js";
 
-const VERSION = "4.9.29";
-const AVATAR_ID = "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";
-const AVATAR_URL = "https://embed.liveavatar.com/v1/" + AVATAR_ID;
-const WS_URL = "wss://embed.liveavatar.com/v1/" + AVATAR_ID + "/ws";
+const VERSION = "4.9.30";
+const SANDBOX_MALE = "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";
+const FEMALE_AVATAR = "09919247-f4b2-45d8-a75e-86fc2fceaebf";
+
+function miaAvatarId(env) {
+  const custom = env.HEYGEN_AVATAR_MIA || env.LIVEAVATAR_AVATAR_ID || "";
+  if (custom && custom !== SANDBOX_MALE) return custom;
+  return FEMALE_AVATAR;
+}
 
 async function freeAvatar(env) {
   const key = env.LIVEAVATAR_API_KEY || env.LIVEAVATAR || "";
   if (!key) return { error: "LIVEAVATAR_API_KEY is not set" };
+  const avatarId = miaAvatarId(env);
+  const custom = avatarId !== FEMALE_AVATAR;
   const tokenRes = await fetch("https://api.liveavatar.com/v1/sessions/token", {
     method: "POST",
     headers: { "X-API-KEY": key, "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: "LITE", is_sandbox: true, avatar_id: AVATAR_ID }),
+    body: JSON.stringify({ mode: "LITE", avatar_id: avatarId }),
   });
   const tokenData = await tokenRes.json().catch(() => ({}));
   const sessionToken = tokenData.session_token || (tokenData.data && tokenData.data.session_token) || "";
@@ -51,8 +58,9 @@ async function freeAvatar(env) {
   }
   return {
     url: "https://meet.livekit.io/custom?liveKitUrl=" + encodeURIComponent(room.livekit_url) + "&token=" + encodeURIComponent(room.livekit_client_token),
-    name: "Wayne",
-    note: "Free sandbox. About 1 minute. Not a custom face.",
+    avatar_id: avatarId,
+    name: custom ? "Mia" : "Katya",
+    note: "Female. LiveAvatar charges about 1 credit a minute. The only free face is Wayne, and he is not used.",
   };
 }
 
@@ -349,7 +357,7 @@ async function statusPayload(env) {
     liveavatar: env.LIVEAVATAR_API_KEY || env.LIVEAVATAR ? "set" : "unset",
     stripe: env.STRIPE_SECRET_KEY || env.STRIPE ? "set" : "unset",
     domain: env.PUBLIC_DOMAIN || null,
-    avatar_id: AVATAR_ID,
+    avatar_id: miaAvatarId(env),
     secrets_configured: {
       liveavatar: !!(env.LIVEAVATAR_API_KEY || env.LIVEAVATAR),
       grok: !!(env.XAI_API_KEY || env.GROK_API_KEY),
@@ -502,7 +510,10 @@ export default {
         try { await seedPentads(env); } catch {}
         return jsonR(await statusPayload(env));
       }
-      if (path === "/config" && method === "GET") return jsonR({ avatar_url: AVATAR_URL, ws_url: WS_URL, avatar_id: AVATAR_ID, version: VERSION, model: (env.XAI_API_KEY || env.GROK_API_KEY) ? "grok-4.5" : (env.GEMINI_MODEL || "gemini-3.8-flash") });
+      if (path === "/config" && method === "GET") {
+        const avatarId = miaAvatarId(env);
+        return jsonR({ avatar_id: avatarId, name: avatarId === FEMALE_AVATAR ? "Katya" : "Mia", version: VERSION, model: (env.XAI_API_KEY || env.GROK_API_KEY) ? "grok-4.5" : (env.GEMINI_MODEL || "gemini-3.8-flash") });
+      }
       if (path === "/cut" || path === "/cut2") {
         return new Response(cut2Html(), { headers: { ...corsH, "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
       }
@@ -894,7 +905,7 @@ export default {
       }
       if (path === "/start" && method === "POST") {
         const body = await request.json().catch(() => ({}));
-        return jsonR({ status: "started", session_id: body.session_id || "", avatar_url: AVATAR_URL });
+        return jsonR({ status: "started", session_id: body.session_id || "", avatar_id: miaAvatarId(env) });
       }
       if (path === "/stop" && method === "POST") {
         const body = await request.json().catch(() => ({}));
