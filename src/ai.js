@@ -365,6 +365,18 @@ const TOOLS = [
         },
       },
       {
+        name: "edit_image",
+        description: "Edit the user's latest uploaded photo. Returns a new image file. Use for remove, retouch, restyle, background, brighten. Not for a brand new picture.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            prompt: { type: "STRING", description: "What to change" },
+            key: { type: "STRING", description: "Vault key of the photo. Empty uses the latest image." },
+          },
+          required: ["prompt"],
+        },
+      },
+      {
         name: "generate_image",
         description: "Mia makes a still image. Tries Grok Imagine first, then Hugging Face FLUX if HF_TOKEN is set and Grok fails. Saves into images/.",
         parameters: {
@@ -618,6 +630,14 @@ export async function handleAgentChat(env, body, helpers) {
       if (files.length) filesNote = "\n\nVault (only if relevant):\n" + files.slice(0, 12).map((f) => `- ${f.name || f.key}`).join("\n");
     } catch {}
   }
+  const wantsPhoto = /\b(edit|retouch|remove|erase|crop|brighten|darken)\b/i.test(lastUser) && /\b(photo|image|picture|pic)\b/i.test(lastUser);
+  if (wantsPhoto && tracked.runTool) {
+    step("note", "Editing the last uploaded photo");
+    const rec = await tracked.runTool("edit_image", { prompt: lastUser, key: body.imageKey || "" });
+    if (!rec || rec.ok === false) return pack("Photo edit failed: " + ((rec && rec.error) || "no result"), { model: "grok-4.5", tools: true });
+    return pack(rec.message + "\n" + rec.download, { model: "grok-4.5", image: rec, tools: true });
+  }
+
   const wantsSite = /\b(web\s?site|landing\s?page|web\s?page|microsite|build me a site|design (a |the )?site|create (a |the )?site|publish (a |the )?site)\b/i.test(lastUser);
   const wantsGrok = /\b(grok|troubleshoot|debug this|why (is|isn't|does|did)|form.?boundary|error 1014)\b/i.test(lastUser);
   const thread = messages.map((m) => String(m.content || "")).join("\n");

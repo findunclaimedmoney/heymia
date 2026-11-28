@@ -367,6 +367,77 @@ export async function generateImage(env, args) {
   };
 }
 
+async function vaultImageDataUri(env, key) {
+  const obj = await env.VAULT.get(key);
+  if (!obj) return { error: "Photo not in the vault: " + key };
+  const buf = new Uint8Array(await obj.arrayBuffer());
+  if (buf.byteLength > 4000000) return { error: "Photo is over 4 MB." };
+  let bin = "";
+  for (let i = 0; i < buf.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  }
+  const mime = (obj.httpMetadata && obj.httpMetadata.contentType) || "image/jpeg";
+  return { uri: "data:" + mime + ";base64," + btoa(bin) };
+}
+
+export async function latestImageKey(env) {
+  if (!env.VAULT) return "";
+  const listed = await env.VAULT.list({ limit: 200 });
+  const imgs = (listed.objects || []).filter((o) => /\.(png|jpe?g|webp)$/i.test(o.key) && !/pentad-plate/i.test(o.key));
+  imgs.sort((a, b) => String(b.uploaded || "").localeCompare(String(a.uploaded || "")));
+  return (imgs[0] && imgs[0].key) || "";
+}
+
+export async function editImage(env, args) {
+  const prompt = String(args.prompt || args.instruction || "").trim();
+  if (!prompt) return { ok: false, error: "Say what to change. Example: remove the background." };
+  const key = env.XAI_API_KEY || env.GROK_API_KEY;
+  if (!key) return { ok: false, error: "XAI_API_KEY not set" };
+  let source = String(args.url || "");
+  const vaultKey = args.key || args.imageKey || (await latestImageKey(env));
+  if (!source) {
+    if (!vaultKey) return { ok: false, error: "Upload the photo first, then say the edit." };
+    if (!env.VAULT) return { ok: false, error: "VAULT unbound" };
+    const packed = await vaultImageDataUri(env, vaultKey);
+    if (packed.error) return { ok: false, error: packed.error };
+    source = packed.uri;
+  }
+  const res = await fetch("https://api.x.ai/v1/images/edits", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+    body: JSON.stringify({
+      model: "grok-imagine-image-2.0",
+      prompt: prompt.slice(0, 2000),
+      image: { url: source },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data.error?.message || data.error || ("image edit HTTP " + res.status);
+    return { ok: false, error: typeof msg === "string" ? msg : JSON.stringify(msg).slice(0, 300) };
+  }
+  const url = data.data?.[0]?.url || data.url || "";
+  const b64 = data.data?.[0]?.b64_json;
+  if (!url && !b64) return { ok: false, error: "Grok returned no edited image" };
+  let bytes;
+  if (b64) bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  else {
+    const img = await fetch(url);
+    if (!img.ok) return { ok: false, error: "edited image download HTTP " + img.status };
+    bytes = await img.arrayBuffer();
+  }
+  const fileKey = "images/edit-" + Date.now().toString(36) + ".jpg";
+  if (env.VAULT) await env.VAULT.put(fileKey, bytes, { httpMetadata: { contentType: "image/jpeg" } });
+  return {
+    ok: true,
+    engine: "grok-imagine-image-2.0",
+    source: vaultKey || "url",
+    key: fileKey,
+    download: "/files?key=" + encodeURIComponent(fileKey) + "&download=1",
+    message: "Edited photo saved.",
+  };
+}
+
 const ZAC_LOOK = "Same cartoon boy in every shot: short dark curly hair, round face, soft smile, white t-shirt under an open short-sleeve white shirt with a dark leaf print, dark trousers. Stylized children's animation only. Not a photograph. Not a real child.";
 
 export function zacChristmasBeats() {

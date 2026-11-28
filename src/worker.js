@@ -8,7 +8,7 @@ import { seedMarketing, listMarketing, saveMarketing, CAPCUT_FREE, MARKETING_KIN
 import { mintPentad, servePentad, pentadHtml, llmsRoot, seedPentads, listPentads } from "./pentad.js";
 import { appendChat, loadChat, saveFact, searchYear, yearBrief, pruneYear, memoryReport } from "./memory.js";
 import { convertMp4, handleClips, seedClipsFolder, listClips } from "./clips.js";
-import { generateClip, generateImage, handleImagine, hfToken, listJobs, refreshJobs } from "./imagine.js";
+import { generateClip, generateImage, editImage, handleImagine, hfToken, listJobs, refreshJobs } from "./imagine.js";
 import { handleEdit, saveEditJob, ffmpegRecipe } from "./edit.js";
 import { handleCinema, createMovie, listMovies } from "./cinema.js";
 import { handleSocial, postInstagram, igConfigured } from "./social.js";
@@ -20,7 +20,7 @@ import { partnerHtml, PARTNER } from "./partner.js";
 import { fanHtml, makeFanClip } from "./fan.js";
 import { cut2Html } from "./cut2.js";
 
-const VERSION = "4.9.30";
+const VERSION = "4.9.31";
 const SANDBOX_MALE = "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";
 const FEMALE_AVATAR = "09919247-f4b2-45d8-a75e-86fc2fceaebf";
 
@@ -622,6 +622,7 @@ export default {
             if (name === "list_clip_jobs") return listJobs(env);
             if (name === "refresh_clip_jobs") return refreshJobs(env);
             if (name === "generate_image") return generateImage(env, args);
+            if (name === "edit_image") return editImage(env, args);
             if (name === "post_instagram") return postInstagram(env, args, ctx);
             if (name === "post_youtube") return postYoutube(env, args, ctx);
             if (name === "create_room") {

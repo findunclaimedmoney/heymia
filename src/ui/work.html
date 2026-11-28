@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-heymia-ui="4.9.30">
+<html lang="en" data-heymia-ui="4.9.31">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1372,6 +1372,7 @@ async function sendToMia(e) {
   state.miaTurns.push({ role: 'user', content: text });
 
   beginTaskBar();
+  const lastImg = (state.files || []).slice().reverse().find((f) => (f.type || '').startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(f.name || f.key || ''));
   const payloads = JSON.stringify({
     message: text,
     messages: (state.miaTurns || [{ role: 'user', content: text }]).slice(-16),
@@ -1379,6 +1380,7 @@ async function sendToMia(e) {
     mode: 'work',
     companion: 'mia',
     stream: true,
+    imageKey: (lastImg && lastImg.key) || '',
   });
   const chatUrls = [location.origin + '/api/chat'];
   if (WORKER_BASE) {
@@ -1427,6 +1429,14 @@ async function sendToMia(e) {
         paintTaskBar(wdata.trace, pending);
         if (wdata.thoughts) addThoughts(wdata.thoughts);
         addMia(reply);
+        if (wdata.image && wdata.image.download) {
+          const box = document.getElementById('mia-chat');
+          const img = document.createElement('img');
+          img.src = (location.origin || '') + wdata.image.download.replace('&download=1', '').replace('?download=1', '');
+          img.alt = 'Edited photo';
+          img.className = 'mr-4 mb-2 max-w-full rounded-xl';
+          if (box) box.appendChild(img);
+        }
         if (Array.isArray(wdata.clips) && wdata.clips.length) showClipBoard(wdata.clips);
         if (!state.miaTurns) state.miaTurns = [];
         state.miaTurns.push({ role: 'assistant', content: reply, trace: wdata.trace || [], worked_ms: wdata.worked_ms || 0 });
